@@ -45,7 +45,7 @@ RUN mkdir -p /etc/service/app
 RUN ( \
       echo "#!/bin/bash"; \
       echo "#"; \
-      echo "# Exit on errors or unitialized variables"; \
+      echo "# Exit on errors or uninitialized variables"; \
       echo "#"; \
       echo "set -e -o nounset"; \
       echo ""; \
@@ -95,23 +95,26 @@ RUN ( \
       echo "#"; \
       echo "set -e -o nounset"; \
       echo ""; \
-      echo "# Create an SSH key and exchange it, if necessary"; \
+      echo ""; \
+      echo "# Create an SSH key, if necessary"; \
       echo "#"; \
       echo "if [ ! -s /root/.ssh/id_rsa.pub ]"; \
       echo "then"; \
       echo "  ssh-keygen -t rsa -f /root/.ssh/id_rsa -q -N \"\""; \
       echo "fi"; \
       echo ""; \
+      echo ""; \
       echo "# Echo the public key"; \
       echo "#"; \
       echo "cat /root/.ssh/id_rsa.pub"; \
+      echo ""; \
       echo ""; \
       echo "# Wait 5 seconds and remove the hold on Endpoint startup"; \
       echo "#"; \
       echo "if test -e /app/wait"; \
       echo "then"; \
-      echo "  sleep 5"; \
       echo "  rm /app/wait"; \
+      echo "  sleep 5"; \
       echo "fi"; \
     )  \
     >> /app/key_exchange.sh
