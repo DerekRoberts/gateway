@@ -64,7 +64,7 @@ RUN ( \
       echo "export REMOTE_PORT=\`expr 40000 + \${gID}\`"; \
       echo ""; \
       echo "/usr/bin/autossh -M0 -p2774 -N -R \${REMOTE_PORT}:localhost:3001 autossh@\${URL_HUB} -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes &"; \
-      echo "sleep 5"; \
+      echo "sleep 10"; \
       echo ""; \
       echo "# Start Endpoint"; \
       echo "#"; \
@@ -100,7 +100,7 @@ RUN ( \
       echo "#"; \
       echo "if [ ! -s /root/.ssh/id_rsa.pub ]"; \
       echo "then"; \
-      echo "  ssh-keygen -t rsa -f /root/.ssh/id_rsa -q -N \"\""; \
+      echo "  ssh-keygen -t rsa -b 4096 -C \"$(whoami)@$(hostname)-$(date -I)\" -f /root/.ssh/id_rsa -q -N \"\""; \
       echo "fi"; \
       echo ""; \
       echo ""; \
