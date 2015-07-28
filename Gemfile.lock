@@ -34,8 +34,13 @@ GIT
       tilt (~> 1.4.1)
 
 GIT
+<<<<<<< HEAD
   remote: http://github.com/physiciansdatacollaborative/patientapi.git
   revision: 8cfb50a53396180b652737f406d5cc2d9e5e3cb5
+=======
+  remote: http://github.com/scoophealth/patientapi.git
+  revision: c38c5f72e0ea4801d2e5cb86c20bd04b544cc67a
+>>>>>>> 36e2cfdb817475dc6ad0048f8b0e093f69f8a8bc
   branch: master
   specs:
     hquery-patient-api (1.0.5)
@@ -180,9 +185,8 @@ GEM
     rdoc (3.12.2)
       json (~> 1.4)
     ref (1.0.5)
-    rest-client (1.6.8)
+    rest-client (1.6.9)
       mime-types (~> 1.16)
-      rdoc (>= 2.4.2)
     roo (1.10.1)
       choice (>= 0.1.4)
       google-spreadsheet-ruby (>= 0.1.5)
@@ -222,7 +226,7 @@ GEM
     uglifier (2.1.1)
       execjs (>= 0.3.0)
       multi_json (~> 1.0, >= 1.0.2)
-    uuid (2.3.7)
+    uuid (2.3.8)
       macaddr (~> 1.0)
     yamler (0.1.0)
 
