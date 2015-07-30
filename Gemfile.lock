@@ -34,13 +34,8 @@ GIT
       tilt (~> 1.4.1)
 
 GIT
-<<<<<<< HEAD
   remote: http://github.com/physiciansdatacollaborative/patientapi.git
   revision: 8cfb50a53396180b652737f406d5cc2d9e5e3cb5
-=======
-  remote: http://github.com/scoophealth/patientapi.git
-  revision: c38c5f72e0ea4801d2e5cb86c20bd04b544cc67a
->>>>>>> 36e2cfdb817475dc6ad0048f8b0e093f69f8a8bc
   branch: master
   specs:
     hquery-patient-api (1.0.5)
