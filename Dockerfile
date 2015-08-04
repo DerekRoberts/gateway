@@ -63,7 +63,7 @@ RUN ( \
       echo "export AUTOSSH_PIDFILE=/app/tmp/pids/autossh.pid"; \
       echo "export REMOTE_PORT=\`expr 40000 + \${gID}\`"; \
       echo ""; \
-      echo "/usr/bin/autossh -M0 -p2774 -N -R \${REMOTE_PORT}:localhost:3001 autossh@\${URL_HUB} -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes &"; \
+      echo "/usr/bin/autossh -M0 -p2774 -N -R \${REMOTE_PORT}:localhost:3001 autossh@\${IP_HUB} -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes &"; \
       echo "sleep 10"; \
       echo ""; \
       echo "# Start Endpoint"; \
