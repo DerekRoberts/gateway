@@ -15,7 +15,14 @@ RUN apt-get update; \
     apt-get install -y \
       autossh \
       mongodb \
+      rsync \
       unzip
+
+
+# Create pdcadmin
+#
+RUN adduser --disabled-password --gecos "" pdcadmin
+RUN usermod -a -G sudo,adm pdcadmin
 
 
 # Start MongoDB
@@ -104,20 +111,20 @@ RUN ( \
       echo ""; \
       echo "# Create an SSH key, if necessary"; \
       echo "#"; \
-      echo "if [ ! -s /root/.ssh/id_rsa.pub ]"; \
+      echo "if [ ! -s /home/pdcadmin/.ssh/id_rsa.pub ]"; \
       echo "then"; \
-      echo "  ssh-keygen -t rsa -b 4096 -C \"$(whoami)@$(hostname)-$(date -I)\" -f /root/.ssh/id_rsa -q -N \"\""; \
+      echo "  /sbin/setuser pdcadmin ssh-keygen -t rsa -b 4096 -C \"$(whoami)@$(hostname)-$(date -I)\" -f /home/pdcadmin/.ssh/id_rsa -q -N \"\""; \
       echo "fi"; \
       echo ""; \
       echo ""; \
       echo "# Echo the public key"; \
       echo "#"; \
-      echo "cat /root/.ssh/id_rsa.pub"; \
+      echo "cat /home/pdcadmin/.ssh/id_rsa.pub"; \
       echo ""; \
       echo ""; \
       echo "# Wait 5 seconds and remove the hold on Endpoint startup"; \
       echo "#"; \
-      echo "if test -e /app/wait"; \
+      echo "if [ -e /app/wait ]"; \
       echo "then"; \
       echo "  rm /app/wait"; \
       echo "  sleep 5"; \
