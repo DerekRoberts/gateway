@@ -15,7 +15,14 @@ RUN apt-get update; \
     apt-get install -y \
       autossh \
       mongodb \
+      rsync \
       unzip
+
+
+# Create pdcadmin
+#
+RUN adduser --disabled-password --gecos "" pdcadmin
+RUN usermod -a -G sudo,adm pdcadmin
 
 
 # Start MongoDB
@@ -41,7 +48,7 @@ RUN chmod +x /etc/service/mongodb/run
 
 # Create startup script and make it executable
 #
-RUN mkdir -p /etc/service/app
+RUN mkdir -p /etc/service/app/
 RUN ( \
       echo "#!/bin/bash"; \
       echo "#"; \
@@ -58,13 +65,19 @@ RUN ( \
       echo "  sleep 5"; \
       echo "done"; \
       echo ""; \
-      echo "# Start tunnel"; \
+      echo "# Start tunnels"; \
       echo "#"; \
-      echo "export AUTOSSH_PIDFILE=/app/tmp/pids/autossh.pid"; \
+      echo "export AUTOSSH_PIDFILE=/app/tmp/pids/autossh_admin.pid"; \
+      echo "export REMOTE_PORT=\`expr 44000 + \${gID}\`"; \
+      echo ""; \
+      echo "/usr/bin/autossh -M0 -p2774 -N -R \${REMOTE_PORT}:localhost:22 autossh@\${IP_HUB} -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes &"; \
+      echo "sleep 5"; \
+      echo ""; \
+      echo "export AUTOSSH_PIDFILE=/app/tmp/pids/autossh_endpoint.pid"; \
       echo "export REMOTE_PORT=\`expr 40000 + \${gID}\`"; \
       echo ""; \
       echo "/usr/bin/autossh -M0 -p2774 -N -R \${REMOTE_PORT}:localhost:3001 autossh@\${IP_HUB} -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes &"; \
-      echo "sleep 10"; \
+      echo "sleep 5"; \
       echo ""; \
       echo "# Start Endpoint"; \
       echo "#"; \
@@ -98,20 +111,20 @@ RUN ( \
       echo ""; \
       echo "# Create an SSH key, if necessary"; \
       echo "#"; \
-      echo "if [ ! -s /root/.ssh/id_rsa.pub ]"; \
+      echo "if [ ! -s /home/pdcadmin/.ssh/id_rsa.pub ]"; \
       echo "then"; \
-      echo "  ssh-keygen -t rsa -b 4096 -C \"$(whoami)@$(hostname)-$(date -I)\" -f /root/.ssh/id_rsa -q -N \"\""; \
+      echo "  /sbin/setuser pdcadmin ssh-keygen -t rsa -b 4096 -C \"$(whoami)@$(hostname)-$(date -I)\" -f /home/pdcadmin/.ssh/id_rsa -q -N \"\""; \
       echo "fi"; \
       echo ""; \
       echo ""; \
       echo "# Echo the public key"; \
       echo "#"; \
-      echo "cat /root/.ssh/id_rsa.pub"; \
+      echo "cat /home/pdcadmin/.ssh/id_rsa.pub"; \
       echo ""; \
       echo ""; \
       echo "# Wait 5 seconds and remove the hold on Endpoint startup"; \
       echo "#"; \
-      echo "if test -e /app/wait"; \
+      echo "if [ -e /app/wait ]"; \
       echo "then"; \
       echo "  rm /app/wait"; \
       echo "  sleep 5"; \
