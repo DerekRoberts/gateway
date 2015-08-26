@@ -14,7 +14,10 @@ RUN apt-get update; \
     apt-get upgrade -y; \
     apt-get install -y \
       autossh \
+      lynx \
       mongodb \
+      nano \
+      nmap \
       rsync \
       unzip
 
@@ -58,6 +61,7 @@ RUN ( \
       echo ""; \
       echo "# Start tunnels"; \
       echo "#"; \
+      echo "sleep 10"; \
       echo "export AUTOSSH_PIDFILE=/home/autossh_initiator/autossh_gateway.pid"; \
       echo "export PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${gID}\`"; \
       echo ""; \
@@ -69,24 +73,24 @@ RUN chmod +x /etc/service/autossh/run
 
 # Startup script for Gateway app
 #
-#RUN mkdir -p /etc/service/app/
-#RUN ( \
-#      echo "#!/bin/bash"; \
-#      echo "#"; \
-#      echo "# Exit on errors or uninitialized variables"; \
-#      echo "#"; \
-#      echo "set -e -o nounset"; \
-#      echo ""; \
-#      echo ""; \
-#      echo "# Start Endpoint"; \
-#      echo "#"; \
-#      echo "cd /app/"; \
-#      echo "/sbin/setuser app bundle exec script/delayed_job start"; \
-#      echo "exec /sbin/setuser app bundle exec rails server -p 3001"; \
-#      echo "/sbin/setuser app bundle exec script/delayed_job stop"; \
-#    )  \
-#    >> /etc/service/app/run
-#RUN chmod +x /etc/service/app/run
+RUN mkdir -p /etc/service/app/
+RUN ( \
+      echo "#!/bin/bash"; \
+      echo "#"; \
+      echo "# Exit on errors or uninitialized variables"; \
+      echo "#"; \
+      echo "set -e -o nounset"; \
+      echo ""; \
+      echo ""; \
+      echo "# Start Endpoint"; \
+      echo "#"; \
+      echo "cd /app/"; \
+      echo "/sbin/setuser app bundle exec script/delayed_job start"; \
+      echo "exec /sbin/setuser app bundle exec rails server -p 3001"; \
+      echo "/sbin/setuser app bundle exec script/delayed_job stop"; \
+    )  \
+    >> /etc/service/app/run
+RUN chmod +x /etc/service/app/run
 
 
 # Prepare /app/ folder
@@ -94,10 +98,10 @@ RUN chmod +x /etc/service/autossh/run
 WORKDIR /app/
 COPY . .
 RUN mkdir -p ./tmp/pids ./util/files
-#RUN gem install multipart-post
+RUN gem install multipart-post
 RUN chown -R app:app /app/
 USER app
-#RUN bundle install --path vendor/bundle
+RUN bundle install --path vendor/bundle
 
 
 # Run initialization command
