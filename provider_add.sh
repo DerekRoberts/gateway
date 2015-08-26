@@ -8,7 +8,7 @@ set -e -o nounset
 # Expected input
 #
 # $0 this script
-# $1 Doctor (clinician) ID
+# $1 Doctor (clinician) IDs (separated by commas)
 
 
 # Check parameters
@@ -18,7 +18,7 @@ then
 	echo
 	echo "Unexpected number of parameters."
 	echo
-	echo "Usage: providers_add.sh [doctorID]"
+	echo "Usage: providers_add.sh [docID #1],[docID #2],...,[docID #n]"
 	echo
 	exit
 fi
@@ -26,7 +26,7 @@ fi
 
 # Set variables from parameters
 #
-DOCTOR=${1}
+DOCTORS=${1}
 
 
 # Get script directory and target file
@@ -35,9 +35,11 @@ DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 TARGET=${DIR}/providers.txt
 
 
-# Add provider
+# Parse ${DOCTORS} by changing bash's internal field separator
+# Note: IFS is preassigned for whitespace
 #
-if(! grep --quiet ${DOCTOR} ${TARGET} )
-then
-	echo ${DOCTOR} | sudo tee -a ${TARGET}
-fi
+IFS=','
+for d in ${DOCTORS}
+do
+	echo ${d} | tee -a ${TARGET}
+done
