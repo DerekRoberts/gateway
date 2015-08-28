@@ -67,7 +67,7 @@ do
 	if ! [[ ${d} =~ ^[0-9]{5}$ ]]
 	then
 		echo ${d} is not a valid CPSID
-		echo ${d} >> PROVIDER_ERRORS.txt
+		echo ${d} >> PROVIDER_ERRORS.log
 	else
 		d_function ${d}
 	fi

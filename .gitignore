@@ -11,5 +11,5 @@ coverage/
 util/files/
 Provider_Hash.txt
 known_hosts
-PROVIDER_ERRORS.txt
+PROVIDER_ERRORS.log
 *.tar
