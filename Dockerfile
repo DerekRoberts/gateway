@@ -14,10 +14,7 @@ RUN apt-get update; \
     apt-get upgrade -y; \
     apt-get install -y \
       autossh \
-      lynx \
       mongodb \
-      nano \
-      nmap \
       rsync \
       unzip
 
@@ -61,11 +58,10 @@ RUN ( \
       echo ""; \
       echo "# Start tunnels"; \
       echo "#"; \
-      echo "sleep 10"; \
       echo "export AUTOSSH_PIDFILE=/home/autossh_initiator/autossh_gateway.pid"; \
       echo "export PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${gID}\`"; \
       echo ""; \
-      echo "/sbin/setuser autossh_initiator /usr/bin/autossh -M0 -p \${PORT_AUTOSSH} -N -R \${PORT_REMOTE}:localhost:3001 autossh@\${IP_HUB} -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes -v"; \
+      echo "exec /sbin/setuser autossh_initiator /usr/bin/autossh -M0 -p \${PORT_AUTOSSH} -N -R \${PORT_REMOTE}:localhost:3001 autossh@\${IP_HUB} -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes -v"; \
     )  \
     >> /etc/service/autossh/run
 RUN chmod +x /etc/service/autossh/run
@@ -82,12 +78,25 @@ RUN ( \
       echo "set -e -o nounset"; \
       echo ""; \
       echo ""; \
-      echo "# Start Endpoint"; \
+      echo "# Start tunnels"; \
+      echo "#"; \
+      echo "sleep 10"; \
+      echo "export AUTOSSH_PIDFILE=/home/autossh_initiator/autossh_gateway.pid"; \
+      echo "export PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${gID}\`"; \
+      echo "#"; \
+      echo "echo /sbin/setuser autossh_initiator /usr/bin/autossh -M0 -p \${PORT_AUTOSSH} -N -R \${PORT_REMOTE}:localhost:3001 autossh@\${IP_HUB} -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes -v"; \
+      echo ""; \
+      echo ""; \
+      echo "# Start Endpoint, retrying once every hour"; \
       echo "#"; \
       echo "cd /app/"; \
-      echo "/sbin/setuser app bundle exec script/delayed_job start"; \
-      echo "exec /sbin/setuser app bundle exec rails server -p 3001"; \
-      echo "/sbin/setuser app bundle exec script/delayed_job stop"; \
+      echo "while :"; \
+      echo "do"; \
+      echo "  /sbin/setuser app bundle exec script/delayed_job start"; \
+      echo "  /sbin/setuser app bundle exec rails server -p 3001"; \
+      echo "  /sbin/setuser app bundle exec script/delayed_job stop"; \
+      echo "  wait 3600"; \
+      echo "done"; \
     )  \
     >> /etc/service/app/run
 RUN chmod +x /etc/service/app/run
