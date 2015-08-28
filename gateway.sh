@@ -1,104 +1,261 @@
 #!/bin/bash
 #
+# Manages Docker containers, images and environments.  Usage formating borrowed
+# directly from Docker.  Proceed to Main section for directions.
+#
 # Halt on errors or uninitialized variables
 #
 set -e -o nounset
 
 
-# Expected input
+################################################################################
+# Functions - must preceed execution
+################################################################################
+
+
+# Output rejection message and exit
 #
-# $0 this script
-# $1 Command: build, add, remove
-# $2 Gateway ID#
-# $3 Doctor (clinician) IDs (separated by commas)
-
-
-# Check parameters
-#
-if([ $# -lt 1 ]||[ $# -gt 3 ])
-then
-	echo
-	echo "Unexpected number of parameters."
-	echo
-	echo "Usage: gateway.sh [build|add|import|export] [OPTIONS] [arg...]"
-	echo
-	exit
-fi
-
-
-# Set variables from parameters, prompt when password not provided
-#
-export COMMAND=${1}
-export GATEWAY_ID=${2:-1000000000}
-export GATEWAY_NAME=pdc-$(printf "%04d" ${GATEWAY_ID})
-export OPTION=${3:-excluded}
-export ARGUMENT=${4:-excluded}
-
-
-# Get script directory and target file
-#
-SCRIPT_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
-
-
-# Pull in variables from config.env
-#
-source ${SCRIPT_DIR}/config.env
-
-
-docker_build ()
+inform_exit ()
 {
+	# Expects one error string
 	echo
-	echo "*** Building gateway *** sudo docker build -t pdc.io/gateway . ***"
-	echo
-	sudo docker build -t pdc.io/gateway .
-	echo
+	echo $1
 	echo
 	exit
 }
 
-docker_run ()
+
+# Output message and command, then execute command
+#
+inform_exec ()
 {
-	if [[ $1 =~ ^[0-9]+$ ]]&&[ $1 -gt 0 ]&&[ $1 -lt 1000 ]
+	# Expects a message and command
+	echo
+	echo "*** ${1} *** ${2}"
+	echo
+	${2}
+	echo
+	echo
+}
+
+
+# Output usage instructions and quit
+#
+usage_error ()
+{
+	# Expects one usage string
+	inform_exit "Usage: ./gateway.sh $1"
+}
+
+
+# Output usage help
+#
+usage_help ()
+{
+	echo
+	echo "Usage: ./gateway.sh COMMAND [OPTIONS] [arguments]"
+	echo
+	echo "Commands:"
+	echo "	build       Build a Docker image"
+	echo "	run         Run a new Docker container"
+	echo "	rm          Remove a Docker container"
+	echo "	test        Run and inspect test container pdc-0000"
+	echo "	save        Save the current Docker image as .tar"
+	echo "	load        Load a Docker image from .tar"
+	echo "	providers   Modify a Gateway's providers.txt"
+	echo
+	echo "'./gateway.sh COMMAND' provides more information as necessary."
+	echo
+	exit
+}
+
+
+# Verify a condition is met, else inform and exit
+#
+verify_condition ()
+{
+	# Expects a condition and an output message
+	if ! ( ${1} )
 	then
-		echo
-		echo "*** Running gateway *** sudo docker run -d --name $2 -h $2 -e gID=$1 --env-file=config.env --restart='always' $3 pdc.io/gateway ***"
-		echo
-		sudo docker run -d --name $2 -h $2 -e gID=$1 --env-file=config.env --restart='always' $3 pdc.io/gateway
-	else
-		echo $1 is not a valid Gateway ID number
-		exit
+		inform_exit "ERROR: ${2}"
 	fi
 }
 
-docker_providers_add ()
+
+# Check Internet connectivity
+#
+verify_internet ()
 {
-	echo
-	echo "*** Adding providers to $1 *** sudo docker exec -ti $1 /sbin/setuser app /app/providers.sh remove $2"
-	echo
-	sudo docker exec -ti $1 /sbin/setuser app /app/providers.sh add $2
+	if [[ "$(ping -c 1 8.8.8.8 | grep '100% packet loss' )" != "" ]]
+	then
+	    inform_exit "ERROR: Build requires an Internet connection"
+	fi
 }
 
-docker_providers_remove ()
+
+# Verify that GATEWAY_ID is an integer 1 - 999
+#
+verify_gateway_id ()
 {
-	echo
-	echo "*** Removing providers from $1 *** sudo docker exec -ti $1 /sbin/setuser app /app/providers.sh remove $2"
-	echo
-	sudo docker exec -ti $1 /sbin/setuser app /app/providers.sh remove $2
+	# Expects a gateway ID#
+	if ! ([[ ${1} =~ ^[0-9]+$ ]]&&[ ${1} -gt 0 ]&&[ ${1} -lt 1000 ])
+	then
+		inform_exit "ERROR: ${1} is not a valid Gateway ID number"
+	fi
+
+	if [[ ${1} == 0* ]]
+	then
+		inform_exit "ERROR: do not start Gateway ID numbers with 0"
+	fi
 }
 
-docker_export ()
+
+# Verify a file is not owned by root
+#
+verify_owner_not_root ()
 {
+	# Expects a file name
+	OWNER=$(ls -ld ${1} | awk '{print $3}')
+	verify_condition "[ ${OWNER} != root ]" "${1} can not be owned by root"
+}
+
+
+# Verify the status of id_rsa, id_rsa.pub and known_hosts
+#
+verify_ssh_files ()
+{
+	# Verify id_rsa, id_rsa.pub and known_hosts are present
+	verify_condition "[ -f ${PATH_SSH_KEYS}/id_rsa ]" "id_rsa missing from ${PATH_SSH_KEYS}"
+	verify_condition "[ -f ${PATH_SSH_KEYS}/id_rsa.pub ]" "id_rsa.pub missing from ${PATH_SSH_KEYS}"
+	verify_condition "[ -f ${PATH_SSH_KEYS}/known_hosts ]" "known_hosts missing from ${PATH_SSH_KEYS}"
+
+	# Check that none of id_rsa, id_rsa.pub and known hosts are owned by root
+	verify_owner_not_root ${PATH_SSH_KEYS}/id_rsa
+	verify_owner_not_root ${PATH_SSH_KEYS}/id_rsa.pub
+	verify_owner_not_root ${PATH_SSH_KEYS}/known_hosts
+}
+
+# Build a Docker gateway image
+#
+docker_build ()
+{
+	# W/o Internet build fails and destroys existing images
+	verify_internet
+	inform_exec "Building gateway" "sudo docker build -t ${DOCKER_REPO_NAME} ."
+}
+
+
+# Run a Docker gateway container
+#
+docker_run ()
+{
+	# Verify ssh files are in order
+	verify_ssh_files
+
+	# Check and assign parameters
+	[ $# -eq 1 ]||[ $# -eq 2 ]|| \
+		usage_error "run [Gateway ID#] [optional: CPSID#1,CPSID#1,...,CPSID#n]"
+	#
+	export GATEWAY_ID=${1}
+	export DOCTORS=${2:-""}
+	#
+	verify_gateway_id ${GATEWAY_ID}
+	export GATEWAY_NAME=pdc-$(printf "%04d" ${GATEWAY_ID})
+
+	# Run a gateway
+	inform_exec "Running gateway" \
+		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} -e gID=${GATEWAY_ID} --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
+
+	# If there are any CPSIDs, then pass them to the gateway
+	[ ! -z ${DOCTORS}] ]|| \
+		echo sudo docker exec -ti ${GATEWAY_NAME} /app/providers.sh add ${DOCTORS}
+}
+
+
+# Run pdc-0000, a test contaienr using sample data
+#
+docker_test ()
+{
+	# Verify ssh files are in order
+	verify_ssh_files
+
+	# Run a gateway
+	inform_exec "Running test gateway" \
+		"sudo docker run -d --name pdc-0000 -h pdc-0000 -e gID=0 --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
+
+	# Import sample data
+	sleep 2
+	inform_exec "Importing sample data" \
+		"sudo docker exec -ti pdc-0000 /app/util/sample10/import.sh"
+
+	# Inspect container
+	inform_exec "Inspecting container" \
+		"sudo docker inspect pdc-0000"
+
+	# Tail logs
+	echo "Press Enter when to tail logs and/or ctrl-C to cancel"
+	read ENTER_HERE
+	inform_exec "Tailing logs" \
+		"sudo docker logs -f pdc-0000"
+}
+
+
+# Run a Docker gateway container
+#
+docker_rm ()
+{
+	docker rm --help
 	echo
-	echo "*** Exporting gateway *** sudo docker save Export Coming Soon ***"
+	echo
+	echo "To minimize errors this has not been scripted."
+	echo
 	echo
 }
 
-docker_import ()
+
+# Modify a gateway's providers whitelist
+#
+docker_providers ()
 {
-	echo
-	echo "*** Import Coming Soon ***"
-	echo
+	# Check and assign parameters
+	[ $# -eq 3 ]|| \
+		usage_error "providers [add|remove] [Gateway ID#] [CPSID#1,CPSID#1,...,CPSID#n]"
+	#
+	export ADD_REMOVE=${1}
+	export GATEWAY_ID=${2}
+	export DOCTORS=${3}
+	#
+	# Exception for pdc-0000
+	[ ${GATEWAY_ID} -eq 0 ]|| verify_gateway_id ${GATEWAY_ID}
+	export GATEWAY_NAME=pdc-$(printf "%04d" ${GATEWAY_ID})
+
+	# Pass parameters to providers.sh on gateway
+	inform_exec "Modifying providers for ${GATEWAY_NAME}" \
+		"sudo docker exec -ti ${GATEWAY_NAME} /sbin/setuser app /app/providers.sh ${ADD_REMOVE} ${DOCTORS}"
 }
+
+
+# Save (export) the current gateway image to a .tar file
+#
+docker_save ()
+{
+	OUTPUT="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}"
+	inform_exec "Saving gateway image" "sudo docker save -o ${OUTPUT} ${DOCKER_REPO_NAME}"
+}
+
+
+# Load (import) pdc.io-gateway.tar as the new gateway image
+#
+docker_load ()
+{
+	# Verify input file is present
+	INPUT="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}"
+	verify_condition "[ -f ${INPUT} ]" \
+		"Verify ${INPUT} is present"
+
+	inform_exec "Loading gateway image" "sudo docker load -i ${INPUT}"
+}
+
 
 docker_configure ()
 {
@@ -156,36 +313,43 @@ docker_configure ()
 }
 
 
+################################################################################
+# Main - parameters and executions start here!
+################################################################################
+
+
+# Expected input
+#
+# $0 this script
+# $1 Command: e.g. build, add, remove
+# $2 Option: e.g. nothing, gateway ID, image name
+# $3 Argument: e.g. nothing, doctor IDs, output path
+
+
+# Set variables from parameters, prompt when password not provided
+#
+export COMMAND=${1:-""}
+export OPTION=${2:-""}
+export ARG_1=${3:-""}
+export ARG_2=${4:-""}
+
+
+# Get script directory and source config.env
+#
+SCRIPT_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+source ${SCRIPT_DIR}/config.env
+
+
 # Run based on command
 #
-if [ "${COMMAND}" = "build" ]
-then
-	docker_build
-elif [ "${COMMAND}" = "add" ]
-then
-	docker_run ${GATEWAY_ID} ${GATEWAY_NAME} "${DOCKER_ENDPOINT}"
-elif [ "${COMMAND}" = "providers-add" ]
-then
-	docker_providers_add ${GATEWAY_NAME} ${OPTION}
-elif [ "${COMMAND}" = "providers-remove" ]
-then
-	docker_providers_remove ${GATEWAY_NAME} ${OPTION}
-elif [ "${COMMAND}" = "export" ]
-then
-	echo
-	echo "*** Export Coming Soon ***"
-elif [ "${COMMAND}" = "import" ]
-then
-	echo
-	echo "*** Import Coming Soon ***"
-elif [ "${COMMAND}" = "configure" ]
-then
-	docker_configure
-else
-	echo "Error!"
-	exit
-fi
-
-
-
-#	pdc-$(printf "%04d" $1)
+case "${COMMAND}" in
+	"build"			) docker_build;;
+	"run"				) docker_run ${OPTION} ${ARG_1};;
+	"test"			) docker_test;;
+	"rm"				) docker_rm;;
+	"save"			) docker_save;;
+	"load"			) docker_load;;
+	"providers"	) docker_providers ${OPTION} ${ARG_1} ${ARG_2};;
+	"configure"	)	docker_configure;;
+	*						) usage_help;;
+esac
