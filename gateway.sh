@@ -63,6 +63,7 @@ usage_help ()
 	echo "	save        Save the current Docker image as .tar"
 	echo "	load        Load a Docker image from .tar"
 	echo "	providers   Modify a Gateway's providers.txt"
+	echo "	configure   Configures Docker, MongoDB and bash"
 	echo
 	echo "'./gateway.sh COMMAND' provides more information as necessary."
 	echo
@@ -343,13 +344,13 @@ source ${SCRIPT_DIR}/config.env
 # Run based on command
 #
 case "${COMMAND}" in
-	"build"			) docker_build;;
-	"run"				) docker_run ${OPTION} ${ARG_1};;
-	"test"			) docker_test;;
-	"rm"				) docker_rm;;
-	"save"			) docker_save;;
-	"load"			) docker_load;;
-	"providers"	) docker_providers ${OPTION} ${ARG_1} ${ARG_2};;
-	"configure"	)	docker_configure;;
-	*						) usage_help;;
+	"build"       ) docker_build;;
+	"run"         ) docker_run ${OPTION} ${ARG_1};;
+	"test"        ) docker_test;;
+	"rm"          ) docker_rm;;
+	"save"        ) docker_save;;
+	"load"        ) docker_load;;
+	"providers"   ) docker_providers ${OPTION} ${ARG_1} ${ARG_2};;
+	"configure"   )	docker_configure;;
+	*             ) usage_help;;
 esac
