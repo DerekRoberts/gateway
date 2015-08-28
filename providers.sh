@@ -18,7 +18,7 @@ then
 	echo
 	echo "Unexpected number of parameters."
 	echo
-	echo "Usage: providers_add.sh [add|remove] [doctor ID#1]"
+	echo "Usage: providers.sh [add|remove] [doctor ID#1]"
 	echo
 	exit
 fi
