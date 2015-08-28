@@ -12,3 +12,4 @@ util/files/
 Provider_Hash.txt
 known_hosts
 PROVIDER_ERRORS.txt
+*.tar
