@@ -162,18 +162,19 @@ docker_run ()
 	#
 	verify_gateway_id ${GATEWAY_ID}
 	export GATEWAY_NAME=pdc-$(printf "%04d" ${GATEWAY_ID})
+	export GATEWAY_PORT=`expr 40000 + ${GATEWAY_ID}`
 
 	# Run a gateway
 	inform_exec "Running gateway" \
-		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} -e gID=${GATEWAY_ID} --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
+		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} -e gID=${GATEWAY_ID} -p ${GATEWAY_PORT}:3001 --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
 
 	# If there are any CPSIDs, then pass them to the gateway
-	[ ${DOCTORS}] == "" ]|| \
-		echo sudo docker exec -ti ${GATEWAY_NAME} /app/providers.sh add ${DOCTORS}
+	[ ${DOCTORS} == "" ]|| \
+		sudo docker exec -ti ${GATEWAY_NAME} /app/providers.sh add ${DOCTORS}
 }
 
 
-# Run pdc-0000, a test contaienr using sample data
+# Run pdc-0500, a test container using sample data
 #
 docker_test ()
 {
@@ -182,22 +183,24 @@ docker_test ()
 
 	# Run a gateway
 	inform_exec "Running test gateway" \
-		"sudo docker run -d --name pdc-0000 -h pdc-0000 -e gID=0 --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
+		"sudo docker run -d --name pdc-0500 -h pdc-0500 -e gID=500 -p 40500:3001 --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
+
+	# Add CPSID - not needed, cpsid in sample providers.txt
 
 	# Import sample data
 	sleep 2
 	inform_exec "Importing sample data" \
-		"sudo docker exec -ti pdc-0000 /app/util/sample10/import.sh"
+		"sudo docker exec -ti pdc-0500 /app/util/sample10/import.sh"
 
 	# Inspect container
 	inform_exec "Inspecting container" \
-		"sudo docker inspect pdc-0000"
+		"sudo docker inspect pdc-0500"
 
 	# Tail logs
 	echo "Press Enter when to tail logs and/or ctrl-C to cancel"
 	read ENTER_HERE
 	inform_exec "Tailing logs" \
-		"sudo docker logs -f pdc-0000"
+		"sudo docker logs -f pdc-0500"
 }
 
 
