@@ -168,7 +168,7 @@ docker_run ()
 		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} -e gID=${GATEWAY_ID} --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
 
 	# If there are any CPSIDs, then pass them to the gateway
-	[ ! -z ${DOCTORS}] ]|| \
+	[ ${DOCTORS}] == "" ]|| \
 		echo sudo docker exec -ti ${GATEWAY_NAME} /app/providers.sh add ${DOCTORS}
 }
 
