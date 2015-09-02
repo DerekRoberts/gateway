@@ -33,7 +33,11 @@ inform_exec ()
 	echo
 	echo "*** ${1} *** ${2}"
 	echo
-	${2}
+	${2} || \
+		{
+			echo "${2} failed!"
+			exit
+		}
 	echo
 	echo
 }
@@ -111,16 +115,6 @@ verify_gateway_id ()
 }
 
 
-# Verify a file is not owned by root
-#
-verify_owner_not_root ()
-{
-	# Expects a file name
-	OWNER=$(ls -ld ${1} | awk '{print $3}')
-	verify_condition "[ ${OWNER} != root ]" "${1} can not be owned by root"
-}
-
-
 # Verify the status of id_rsa, id_rsa.pub and known_hosts
 #
 verify_ssh_files ()
@@ -129,11 +123,6 @@ verify_ssh_files ()
 	verify_condition "[ -f ${PATH_SSH_KEYS}/id_rsa ]" "id_rsa missing from ${PATH_SSH_KEYS}"
 	verify_condition "[ -f ${PATH_SSH_KEYS}/id_rsa.pub ]" "id_rsa.pub missing from ${PATH_SSH_KEYS}"
 	verify_condition "[ -f ${PATH_SSH_KEYS}/known_hosts ]" "known_hosts missing from ${PATH_SSH_KEYS}"
-
-	# Check that none of id_rsa, id_rsa.pub and known hosts are owned by root
-	verify_owner_not_root ${PATH_SSH_KEYS}/id_rsa
-	verify_owner_not_root ${PATH_SSH_KEYS}/id_rsa.pub
-	verify_owner_not_root ${PATH_SSH_KEYS}/known_hosts
 }
 
 # Build a Docker gateway image
@@ -355,5 +344,5 @@ case "${COMMAND}" in
 	"load"        ) docker_load;;
 	"providers"   ) docker_providers ${OPTION} ${ARG_1} ${ARG_2};;
 	"configure"   )	docker_configure;;
-	*             ) usage_help;;
+	*             ) usage_help
 esac
