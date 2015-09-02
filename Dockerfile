@@ -22,11 +22,6 @@ RUN apt-get update; \
     apt-get clean autoclean autoremove -y
 
 
-# Create autossh_initiator user
-#
-RUN adduser --disabled-password --gecos "" autossh_initiator
-
-
 # Start script for MongoDB
 #
 RUN mkdir -p /etc/service/mongodb/
@@ -49,14 +44,21 @@ RUN chmod +x /etc/service/mongodb/run
 RUN mkdir -p /etc/service/autossh/
 RUN ( \
       echo "#!/bin/bash"; \
+      echo "set -x -e -o nounset"; \
+      echo ""; \
+      echo "# Create AutoSSH user"; \
+      echo "#"; \
+      echo "WHO=\${AUTOSSH_INITIATOR}"; \
+      echo "getent passwd \${WHO} || adduser --disabled-password --gecos '' \${WHO}"; \
+      echo "chown -R \${WHO}:\${WHO} /home/\${WHO}"; \
       echo ""; \
       echo ""; \
       echo "# Start tunnels"; \
       echo "#"; \
-      echo "export AUTOSSH_PIDFILE=/home/autossh_initiator/autossh_gateway.pid"; \
-      echo "export PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${gID}\`"; \
+      echo "export AUTOSSH_PIDFILE=/home/\${WHO}/autossh_gateway.pid"; \
+      echo "PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${gID}\`"; \
       echo "#"; \
-      echo "exec /sbin/setuser autossh_initiator /usr/bin/autossh -M0 -p \${PORT_AUTOSSH} -N -R \${PORT_REMOTE}:localhost:3001 autossh@\${IP_HUB} -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes -v"; \
+      echo "exec /sbin/setuser \${WHO} /usr/bin/autossh -M0 -p \${PORT_AUTOSSH} -N -R \${PORT_REMOTE}:localhost:3001 \${AUTOSSH_RECEIVER}@\${IP_HUB} -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes -v"; \
     )  \
     >> /etc/service/autossh/run
 RUN chmod +x /etc/service/autossh/run
