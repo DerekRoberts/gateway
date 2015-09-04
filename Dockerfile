@@ -71,7 +71,7 @@ RUN ( \
       echo "#!/bin/bash"; \
       echo ""; \
       echo ""; \
-      echo "# Start Endpoint, retrying once every hour"; \
+      echo "# Start Endpoint"; \
       echo "#"; \
       echo "cd /app/"; \
       echo "/sbin/setuser app bundle exec script/delayed_job start"; \

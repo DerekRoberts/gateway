@@ -68,6 +68,7 @@ usage_help ()
 	echo "	load        Load a Docker image from .tar"
 	echo "	providers   Modify a Gateway's providers.txt"
 	echo "	configure   Configures Docker, MongoDB and bash"
+	echo "	keygen      Create id_rsa, id_rsa.pub and known_hosts"
 	echo
 	echo "'./gateway.sh COMMAND' provides more information as necessary."
 	echo
@@ -125,6 +126,28 @@ verify_ssh_files ()
 	verify_condition "[ -f ${PATH_SSH_KEYS}/known_hosts ]" "known_hosts missing from ${PATH_SSH_KEYS}"
 }
 
+# Verify the status of id_rsa, id_rsa.pub and known_hosts
+#
+create_ssh_files ()
+{
+	# Create ç
+	sudo mkdir -p ${PATH_SSH_KEYS}
+
+	# Create known_hosts
+	sudo /bin/bash -c "ssh-keyscan -t rsa -H ${IP_HUB} | tee -a ${PATH_SSH_KEYS}/known_hosts"
+
+	# Create id_rsa and id_rsa.pub
+	sudo ssh-keygen -b 4096 -t rsa -N '' -C "$(whoami)@$(hostname)" -f ${PATH_SSH_KEYS}/id_rsa
+
+	# Echo public key
+	echo
+	echo "New SSH files generated.  Please take note of the public key."
+	echo
+	cat ${PATH_SSH_KEYS}/id_rsa.pub
+	echo
+	echo
+}
+
 # Build a Docker gateway image
 #
 docker_build ()
@@ -132,6 +155,7 @@ docker_build ()
 	# W/o Internet build fails and destroys existing images
 	verify_internet
 	inform_exec "Building gateway" "sudo docker build -t ${DOCKER_REPO_NAME} ."
+	sudo docker pull
 }
 
 
@@ -142,7 +166,7 @@ docker_run ()
 	# Verify ssh files are in order
 	verify_ssh_files
 
-	# Check and assign parameters
+	# Check parameters and assign variables
 	[ $# -eq 1 ]||[ $# -eq 2 ]|| \
 		usage_error "run [Gateway ID#] [optional: CPSID#1,CPSID#1,...,CPSID#n]"
 	#
@@ -163,33 +187,38 @@ docker_run ()
 }
 
 
-# Run pdc-0500, a test container using sample data
+# Run pdc-0000, a test container using sample data
 #
 docker_test ()
 {
 	# Verify ssh files are in order
 	verify_ssh_files
 
+	# Assign variables
+	export GATEWAY_ID=${TEST_GATEWAY}
+	export GATEWAY_NAME=pdc-$(printf "%04d" ${GATEWAY_ID})
+	export GATEWAY_PORT=`expr 40000 + ${GATEWAY_ID}`
+
 	# Run a gateway
 	inform_exec "Running test gateway" \
-		"sudo docker run -d --name pdc-0500 -h pdc-0500 -e gID=500 -p 40500:3001 --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
+		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} -e gID=${GATEWAY_ID} -p ${GATEWAY_PORT}:3001 --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
 
 	# Add CPSID - not needed, cpsid in sample providers.txt
 
 	# Import sample data
 	sleep 2
 	inform_exec "Importing sample data" \
-		"sudo docker exec -ti pdc-0500 /app/util/sample10/import.sh"
+		"sudo docker exec -ti ${GATEWAY_NAME} /app/util/sample10/import.sh"
 
 	# Inspect container
 	inform_exec "Inspecting container" \
-		"sudo docker inspect pdc-0500"
+		"sudo docker inspect ${GATEWAY_NAME}"
 
 	# Tail logs
 	echo "Press Enter when to tail logs and/or ctrl-C to cancel"
 	read ENTER_HERE
 	inform_exec "Tailing logs" \
-		"sudo docker logs -f pdc-0500"
+		"sudo docker logs -f ${GATEWAY_NAME}"
 }
 
 
@@ -333,6 +362,16 @@ SCRIPT_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source ${SCRIPT_DIR}/config.env
 
 
+# If DNS is disabled (,, = lowercase, bash 4+), then use --dns-search=.
+#
+#if [ "${DNS_DISABLE,,}" == "yes" ]
+#then
+#	export DOCKER_ENDPOINT="${DOCKER_ENDPOINT} --dns-search=."
+#fi
+[ "${DNS_DISABLE,,}" != "yes" ] || \
+	export DOCKER_ENDPOINT="${DOCKER_ENDPOINT} --dns-search=."
+
+
 # Run based on command
 #
 case "${COMMAND}" in
@@ -343,6 +382,7 @@ case "${COMMAND}" in
 	"save"        ) docker_save;;
 	"load"        ) docker_load;;
 	"providers"   ) docker_providers ${OPTION} ${ARG_1} ${ARG_2};;
-	"configure"   )	docker_configure;;
+	"configure"   ) docker_configure;;
+	"keygen"      ) create_ssh_files;;
 	*             ) usage_help
 esac
