@@ -1,6 +1,11 @@
 GIT
+<<<<<<< HEAD
   remote: http://github.com/physiciansdatacollaborative/health-data-standards.git
   revision: 8caf81d44431b486a109545e2b04fda248f8cdc1
+=======
+  remote: http://github.com/scoophealth/health-data-standards.git
+  revision: 475fcb7cd48c9938e10ff3ffdcb40c59bae7ad6f
+>>>>>>> 2e40a7457fe3cce0d8680dcf289969cc657f0c81
   branch: master
   specs:
     health-data-standards (2.1.4)
