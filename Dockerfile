@@ -15,28 +15,10 @@ RUN apt-get update; \
     apt-get install -y \
       autossh \
       lynx \
-      mongodb \
       nano \
       rsync \
       unzip; \
     apt-get clean autoclean autoremove -y
-
-
-# Start script for MongoDB
-#
-RUN mkdir -p /etc/service/mongodb/
-RUN ( \
-      echo "#!/bin/bash"; \
-      echo ""; \
-      echo ""; \
-      echo "# Start MongoDB"; \
-      echo "#"; \
-      echo "mkdir -p /var/lib/mongodb/"; \
-      echo "mkdir -p /data/db/"; \
-      echo "exec mongod --smallfiles"; \
-    )  \
-    >> /etc/service/mongodb/run
-RUN chmod +x /etc/service/mongodb/run
 
 
 # Startup script for Gateway tunnel
@@ -88,6 +70,7 @@ WORKDIR /app/
 COPY . .
 RUN mkdir -p ./tmp/pids ./util/files
 RUN gem install multipart-post
+RUN sed -i -e "s/localhost:27017/database:27017/" config/mongoid.yml
 RUN chown -R app:app /app/
 USER app
 RUN bundle install --path vendor/bundle
