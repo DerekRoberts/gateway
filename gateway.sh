@@ -155,11 +155,11 @@ docker_build ()
 	# W/o Internet build fails and destroys existing images
 	verify_internet
 	inform_exec "Building gateway" "sudo docker build -t ${DOCKER_REPO_NAME} ."
-	sudo docker pull
+	sudo docker pull mongo
 }
 
 
-# Run a Docker gateway container
+# Run a gateway and database containers - for deployment
 #
 docker_run ()
 {
@@ -175,11 +175,14 @@ docker_run ()
 	#
 	verify_gateway_id ${GATEWAY_ID}
 	export GATEWAY_NAME=pdc-$(printf "%04d" ${GATEWAY_ID})
+	export DATABASE_NAME=${GATEWAY_NAME}-db
 	export GATEWAY_PORT=`expr 40000 + ${GATEWAY_ID}`
 
-	# Run a gateway
+	# Run a database and gateway
+	sudo docker run -d --name ${DATABASE_NAME} -h ${DATABASE_NAME} --restart='always' mongo --storageEngine wiredTiger || echo ${DATABASE_NAME} exists!
+	#
 	inform_exec "Running gateway" \
-		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} -e gID=${GATEWAY_ID} -p ${GATEWAY_PORT}:3001 --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
+		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} --link ${DATABASE_NAME}:database -e gID=${GATEWAY_ID} -p ${GATEWAY_PORT}:3001 --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
 
 	# If there are any CPSIDs, then pass them to the gateway
 	[ ${DOCTORS} == "" ]|| \
@@ -187,7 +190,7 @@ docker_run ()
 }
 
 
-# Run pdc-0000, a test container using sample data
+# Run pdc-0000 and pdc-0000-db - for testing
 #
 docker_test ()
 {
@@ -197,18 +200,19 @@ docker_test ()
 	# Assign variables
 	export GATEWAY_ID=${TEST_GATEWAY}
 	export GATEWAY_NAME=pdc-$(printf "%04d" ${GATEWAY_ID})
+	export DATABASE_NAME=${GATEWAY_NAME}-db
 	export GATEWAY_PORT=`expr 40000 + ${GATEWAY_ID}`
+
+	# Run a database and gateway
+	sudo docker run -d --name ${DATABASE_NAME} -h ${DATABASE_NAME} --restart='always' -v ${SCRIPT_DIR}/util/:/util/:ro mongo --storageEngine wiredTiger || echo ${DATABASE_NAME} exists!
 
 	# Run a gateway
 	inform_exec "Running test gateway" \
-		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} -e gID=${GATEWAY_ID} -p ${GATEWAY_PORT}:3001 --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
-
-	# Add CPSID - not needed, cpsid in sample providers.txt
+		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} --link ${DATABASE_NAME}:database -e gID=${GATEWAY_ID} -p ${GATEWAY_PORT}:3001 --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
 
 	# Import sample data
 	sleep 2
-	inform_exec "Importing sample data" \
-		"sudo docker exec -ti ${GATEWAY_NAME} /app/util/sample10/import.sh"
+	sudo docker exec -ti ${DATABASE_NAME} /util/sample10/import.sh
 
 	# Inspect container
 	inform_exec "Inspecting container" \
@@ -257,12 +261,15 @@ docker_providers ()
 }
 
 
-# Save (export) the current gateway image to a .tar file
+# Save (export) the current gateway and mongo images to tar files
 #
 docker_save ()
 {
-	OUTPUT="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}"
-	inform_exec "Saving gateway image" "sudo docker save -o ${OUTPUT} ${DOCKER_REPO_NAME}"
+	GATEWAY_OUT="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}.tar"
+	DATABASE_OUT="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}-db.tar"
+	#
+	inform_exec "Saving gateway image" "sudo docker save -o ${GATEWAY_OUT} ${DOCKER_REPO_NAME}"
+	inform_exec "Saving gateway image" "sudo docker save -o ${DATABASE_OUT} mongo"
 }
 
 
@@ -271,11 +278,16 @@ docker_save ()
 docker_load ()
 {
 	# Verify input file is present
-	INPUT="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}"
-	verify_condition "[ -f ${INPUT} ]" \
-		"Verify ${INPUT} is present"
-
-	inform_exec "Loading gateway image" "sudo docker load -i ${INPUT}"
+	GATEWAY_IN="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}.tar"
+	DATABASE_IN="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}-db"
+	#
+	verify_condition "[ -f ${GATEWAY_IN} ]" \
+		"Verify ${GATEWAY_IN} is present"
+	verify_condition "[ -f ${DATABASE_IN} ]" \
+		"Verify ${DATABASE_IN} is present"
+	#
+	inform_exec "Loading gateway image" "sudo docker load -i ${GATEWAY_IN}"
+	inform_exec "Loading gateway image" "sudo docker load -i ${DATABASE_IN}"
 }
 
 
@@ -324,8 +336,6 @@ docker_configure ()
 			echo "alias l='sudo docker logs -f'"; \
 			echo "alias p='sudo docker ps -a'"; \
 			echo "alias s='sudo docker ps -a | less -S'"; \
-			echo "alias m='make'"; \
-			echo "alias ggraph='git log --oneline --graph --decorate --color'"; \
 		) | tee -a ${HOME}/.bashrc; \
 		echo ""; \
 		echo ""; \
@@ -364,10 +374,6 @@ source ${SCRIPT_DIR}/config.env
 
 # If DNS is disabled (,, = lowercase, bash 4+), then use --dns-search=.
 #
-#if [ "${DNS_DISABLE,,}" == "yes" ]
-#then
-#	export DOCKER_ENDPOINT="${DOCKER_ENDPOINT} --dns-search=."
-#fi
 [ "${DNS_DISABLE,,}" != "yes" ] || \
 	export DOCKER_ENDPOINT="${DOCKER_ENDPOINT} --dns-search=."
 
