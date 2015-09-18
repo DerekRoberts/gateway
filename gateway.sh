@@ -1,3 +1,4 @@
+
 #!/bin/bash
 #
 # Manages Docker containers, images and environments.  Usage formating borrowed
@@ -118,16 +119,6 @@ verify_gateway_id ()
 
 # Verify the status of id_rsa, id_rsa.pub and known_hosts
 #
-verify_ssh_files ()
-{
-	# Verify id_rsa, id_rsa.pub and known_hosts are present
-	verify_condition "[ -f ${PATH_SSH_KEYS}/id_rsa ]" "id_rsa missing from ${PATH_SSH_KEYS}"
-	verify_condition "[ -f ${PATH_SSH_KEYS}/id_rsa.pub ]" "id_rsa.pub missing from ${PATH_SSH_KEYS}"
-	verify_condition "[ -f ${PATH_SSH_KEYS}/known_hosts ]" "known_hosts missing from ${PATH_SSH_KEYS}"
-}
-
-# Verify the status of id_rsa, id_rsa.pub and known_hosts
-#
 create_ssh_files ()
 {
 	# Create ç
@@ -163,9 +154,6 @@ docker_build ()
 #
 docker_run ()
 {
-	# Verify ssh files are in order
-	verify_ssh_files
-
 	# Check parameters and assign variables
 	[ $# -eq 1 ]||[ $# -eq 2 ]|| \
 		usage_error "run [Gateway ID#] [optional: CPSID#1,CPSID#1,...,CPSID#n]"
@@ -179,7 +167,7 @@ docker_run ()
 	export GATEWAY_PORT=`expr 40000 + ${GATEWAY_ID}`
 
 	# Run a database and gateway
-	sudo docker run -d --name ${DATABASE_NAME} -h ${DATABASE_NAME} --restart='always' mongo --storageEngine wiredTiger || echo ${DATABASE_NAME} exists!
+	sudo docker run -d --name ${DATABASE_NAME} -h ${DATABASE_NAME} --restart='always' mongo --storageEngine wiredTiger || echo "NOTE: Updates should reuse existing databases"
 	#
 	inform_exec "Running gateway" \
 		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} --link ${DATABASE_NAME}:database -e gID=${GATEWAY_ID} -p ${GATEWAY_PORT}:3001 --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
@@ -194,8 +182,14 @@ docker_run ()
 #
 docker_test ()
 {
-	# Verify ssh files are in order
-	verify_ssh_files
+	# Verify id_rsa, id_rsa.pub and known_hosts are present
+	verify_condition "[ -f ${PATH_SSH_KEYS}/id_rsa ]" "id_rsa missing from ${PATH_SSH_KEYS}"
+	verify_condition "[ -f ${PATH_SSH_KEYS}/id_rsa.pub ]" "id_rsa.pub missing from ${PATH_SSH_KEYS}"
+	verify_condition "[ -f ${PATH_SSH_KEYS}/known_hosts ]" "known_hosts missing from ${PATH_SSH_KEYS}"
+
+	# Verify transparent_hugepage and its defrag are disabled
+	verify_condition "grep --quiet \[never\] /sys/kernel/mm/transparent_hugepage/enabled" "grep '\[never\]' /sys/kernel/mm/transparent_hugepage/enabled"
+	verify_condition "grep --quiet \[never\] /sys/kernel/mm/transparent_hugepage/defrag" "Disable transparent hugepage's defrag"
 
 	# Assign variables
 	export GATEWAY_ID=${TEST_GATEWAY}
@@ -204,7 +198,7 @@ docker_test ()
 	export GATEWAY_PORT=`expr 40000 + ${GATEWAY_ID}`
 
 	# Run a database and gateway
-	sudo docker run -d --name ${DATABASE_NAME} -h ${DATABASE_NAME} --restart='always' -v ${SCRIPT_DIR}/util/:/util/:ro mongo --storageEngine wiredTiger || echo ${DATABASE_NAME} exists!
+	sudo docker run -d --name ${DATABASE_NAME} -h ${DATABASE_NAME} --restart='always' -v ${SCRIPT_DIR}/util/:/util/:ro mongo --storageEngine wiredTiger || echo "NOTE: Updates should reuse existing databases"
 
 	# Run a gateway
 	inform_exec "Running test gateway" \
@@ -279,15 +273,20 @@ docker_load ()
 {
 	# Verify input file is present
 	GATEWAY_IN="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}.tar"
-	DATABASE_IN="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}-db"
+	DATABASE_IN="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}-db.tar"
 	#
-	verify_condition "[ -f ${GATEWAY_IN} ]" \
-		"Verify ${GATEWAY_IN} is present"
-	verify_condition "[ -f ${DATABASE_IN} ]" \
-		"Verify ${DATABASE_IN} is present"
-	#
-	inform_exec "Loading gateway image" "sudo docker load -i ${GATEWAY_IN}"
-	inform_exec "Loading gateway image" "sudo docker load -i ${DATABASE_IN}"
+	if [ -f ${GATEWAY_IN} ]
+	then
+		inform_exec "Loading gateway image" "sudo docker load -i ${GATEWAY_IN}"
+	else
+		echo "${GATEWAY_IN} not found/loaded"
+	fi
+
+	if [ -f ${DATABASE_IN} ]; then
+		inform_exec "Loading gateway image" "sudo docker load -i ${DATABASE_IN}"
+	else
+		echo "${GATEWAY_IN} not found/loaded"
+	fi
 }
 
 
@@ -305,8 +304,8 @@ docker_configure ()
 
 	# Configure MongoDB
 	#
-	( echo never | sudo tee /sys/kernel/mm/transparent_hugepage/enabled )> /dev/null
-	( echo never | sudo tee /sys/kernel/mm/transparent_hugepage/defrag )> /dev/null
+	echo never | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
+	echo never | sudo tee /sys/kernel/mm/transparent_hugepage/defrag
 
 	# Configure ~/.bashrc, if necessary
 	#

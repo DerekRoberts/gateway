@@ -40,6 +40,7 @@ RUN ( \
       echo "export AUTOSSH_PIDFILE=/home/\${WHO}/autossh_gateway.pid"; \
       echo "PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${gID}\`"; \
       echo "#"; \
+      echo "sleep 10"; \
       echo "exec /sbin/setuser \${WHO} /usr/bin/autossh -M0 -p \${PORT_AUTOSSH} -N -R \${PORT_REMOTE}:localhost:3001 \${AUTOSSH_RECEIVER}@\${IP_HUB} -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes -v"; \
     )  \
     >> /etc/service/autossh/run
