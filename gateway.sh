@@ -130,6 +130,10 @@ create_ssh_files ()
 	# Create id_rsa and id_rsa.pub
 	sudo ssh-keygen -b 4096 -t rsa -N '' -C "$(whoami)@$(hostname)" -f ${PATH_SSH_KEYS}/id_rsa
 
+	# Restrict access
+	sudo chmod 600 ${PATH_SSH_KEYS}/*
+
+
 	# Echo public key
 	echo
 	echo "New SSH files generated.  Please take note of the public key."
@@ -167,7 +171,9 @@ docker_run ()
 	export GATEWAY_PORT=`expr 40000 + ${GATEWAY_ID}`
 
 	# Run a database and gateway
-	sudo docker run -d --name ${DATABASE_NAME} -h ${DATABASE_NAME} --restart='always' mongo --storageEngine wiredTiger || echo "NOTE: Updates should reuse existing databases"
+	sudo docker run -d --name ${DATABASE_NAME} -h ${DATABASE_NAME} \
+		--restart='always' mongo --storageEngine wiredTiger || \
+		echo "NOTE: Updates should reuse existing databases"
 	#
 	inform_exec "Running gateway" \
 		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} --link ${DATABASE_NAME}:database -e gID=${GATEWAY_ID} -p ${GATEWAY_PORT}:3001 --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
