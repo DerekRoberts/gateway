@@ -8,7 +8,7 @@
 #
 # Note: deployment Dockerfile uses git clone, not copy
 #
-# Samples at https://github.com/physiciansdatacollaborative/endpoint.git
+# Samples at https://github.com/pdcbc/endpoint.git
 
 
 # Base image

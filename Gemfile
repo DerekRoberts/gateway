@@ -16,10 +16,10 @@ gem 'mongoid'
 gem 'delayed_job'
 gem 'delayed_job_mongoid'
 
-gem 'hquery-patient-api', :git => 'http://github.com/physiciansdatacollaborative/patientapi.git', :branch => 'master', :tag => '0.1.0'
-gem "health-data-standards", :git => 'http://github.com/physiciansdatacollaborative/health-data-standards.git', :branch => 'master', :tag => 'pdc-0.1.1'
-gem "hqmf2js", :git => 'http://github.com/physiciansdatacollaborative/hqmf2js.git', :branch => 'master', :tag => 'pdc-0.1.0'
-gem 'hqmf-parser', :git => 'http://github.com/physiciansdatacollaborative/hqmf-parser.git', :branch => 'master', :tag => 'pdc-0.1.0'
+gem 'hquery-patient-api', :git => 'http://github.com/pdcbc/patientapi.git', :branch => 'master', :tag => '0.1.0'
+gem "health-data-standards", :git => 'http://github.com/pdcbc/health-data-standards.git', :branch => 'master', :tag => 'pdc-0.1.1'
+gem "hqmf2js", :git => 'http://github.com/pdcbc/hqmf2js.git', :branch => 'master', :tag => 'pdc-0.1.0'
+gem 'hqmf-parser', :git => 'http://github.com/pdcbc/hqmf-parser.git', :branch => 'master', :tag => 'pdc-0.1.0'
 
 gem 'coderay'
 
