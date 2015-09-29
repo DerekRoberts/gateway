@@ -1,119 +1,102 @@
-# Dockerfile for the PDC's Endpoint service
+# Dockerfile for the PDC's Gateway service, part of an Endpoint deployment
 #
+#
+# Modify default settings at runtime with environment files and/or variables.
+# - Set Gateway ID#: -e gID=####
+# - Set Hub IP addr: -e IP_HUB=#.#.#.#
+# - Use an env file: --env-file=/path/to/file.env
+#
+# Note: deployment Dockerfile uses git clone, not copy
+#
+# Samples at https://github.com/pdcbc/endpoint.git
+
+
 # Base image
 #
 FROM phusion/passenger-ruby19
+MAINTAINER derek.roberts@gmail.com
 
 
-# Update system, install AuthSSH, Lynx and UnZip
+# Update system and packages
 #
 ENV DEBIAN_FRONTEND noninteractive
 RUN echo 'Dpkg::Options{ "--force-confdef"; "--force-confold" }' \
-      >> /etc/apt/apt.conf.d/local
-RUN apt-get update; \
-    apt-get upgrade -y; \
+      >> /etc/apt/apt.conf.d/local; \
+    apt-get update; \
     apt-get install -y \
       autossh \
-      mongodb \
-      rsync \
-      unzip
-
-
-# Create autossh_initiator user
-#
-RUN adduser --disabled-password --gecos "" autossh_initiator
-
-
-# Start script for MongoDB
-#
-RUN mkdir -p /etc/service/mongodb/
-RUN ( \
-      echo "#!/bin/bash"; \
-      echo "#"; \
-      echo "# Exit on errors or unitialized variables"; \
-      echo "#"; \
-      echo "set -e -o nounset"; \
-      echo ""; \
-      echo ""; \
-      echo "# Start MongoDB"; \
-      echo "#"; \
-      echo "mkdir -p /var/lib/mongodb/"; \
-      echo "mkdir -p /data/db/"; \
-      echo "mongod --smallfiles"; \
-    )  \
-    >> /etc/service/mongodb/run
-RUN chmod +x /etc/service/mongodb/run
-
-
-# Startup script for Gateway tunnel
-#
-RUN mkdir -p /etc/service/autossh/
-RUN ( \
-      echo "#!/bin/bash"; \
-      echo "#"; \
-      echo "# Exit on errors or uninitialized variables"; \
-      echo "#"; \
-      echo "set -e -o nounset"; \
-      echo ""; \
-      echo ""; \
-      echo "# Start tunnels"; \
-      echo "#"; \
-      echo "export AUTOSSH_PIDFILE=/home/autossh_initiator/autossh_gateway.pid"; \
-      echo "export PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${gID}\`"; \
-      echo ""; \
-      echo "exec /sbin/setuser autossh_initiator /usr/bin/autossh -M0 -p \${PORT_AUTOSSH} -N -R \${PORT_REMOTE}:localhost:3001 autossh@\${IP_HUB} -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes -v"; \
-    )  \
-    >> /etc/service/autossh/run
-RUN chmod +x /etc/service/autossh/run
-
-
-# Startup script for Gateway app
-#
-RUN mkdir -p /etc/service/app/
-RUN ( \
-      echo "#!/bin/bash"; \
-      echo "#"; \
-      echo "# Exit on errors or uninitialized variables"; \
-      echo "#"; \
-      echo "set -e -o nounset"; \
-      echo ""; \
-      echo ""; \
-      echo "# Start tunnels"; \
-      echo "#"; \
-      echo "sleep 10"; \
-      echo "export AUTOSSH_PIDFILE=/home/autossh_initiator/autossh_gateway.pid"; \
-      echo "export PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${gID}\`"; \
-      echo "#"; \
-      echo "echo /sbin/setuser autossh_initiator /usr/bin/autossh -M0 -p \${PORT_AUTOSSH} -N -R \${PORT_REMOTE}:localhost:3001 autossh@\${IP_HUB} -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes -v"; \
-      echo ""; \
-      echo ""; \
-      echo "# Start Endpoint, retrying once every hour"; \
-      echo "#"; \
-      echo "cd /app/"; \
-      echo "while :"; \
-      echo "do"; \
-      echo "  /sbin/setuser app bundle exec script/delayed_job start"; \
-      echo "  /sbin/setuser app bundle exec rails server -p 3001"; \
-      echo "  /sbin/setuser app bundle exec script/delayed_job stop"; \
-      echo "  wait 3600"; \
-      echo "done"; \
-    )  \
-    >> /etc/service/app/run
-RUN chmod +x /etc/service/app/run
+      git; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 
 # Prepare /app/ folder
 #
 WORKDIR /app/
 COPY . .
-RUN mkdir -p ./tmp/pids ./util/files
-RUN gem install multipart-post
-RUN chown -R app:app /app/
-USER app
-RUN bundle install --path vendor/bundle
+RUN mkdir -p ./tmp/pids ./util/files; \
+    gem install multipart-post; \
+    sed -i -e "s/localhost:27017/database:27017/" config/mongoid.yml; \
+    chown -R app:app /app/; \
+    /sbin/setuser app bundle install --path vendor/bundle
+
+
+# Create AutoSSH User
+#
+RUN adduser --disabled-password --gecos '' --home /home/autossh autossh; \
+    chown -R autossh:autossh /home/autossh
+
+
+# Startup script for Gateway tunnel
+#
+RUN SRV=autossh; \
+    mkdir -p /etc/service/${SRV}/; \
+    ( \
+      echo "#!/bin/bash"; \
+      echo "set -e -o nounset"; \
+      echo ""; \
+      echo ""; \
+      echo "# Set variable defaults"; \
+      echo "#"; \
+      echo "gID=\${gID:-0}"; \
+      echo "IP_HUB=\${IP_HUB:-10.0.2.2}"; \
+      echo "PORT_AUTOSSH=\${PORT_AUTOSSH:-22}"; \
+      echo "PORT_START_GATEWAY=\${PORT_START_GATEWAY:-40000}"; \
+      echo ""; \
+      echo ""; \
+      echo "# Start tunnels"; \
+      echo "#"; \
+      echo "export AUTOSSH_PIDFILE=/home/autossh/autossh_gateway.pid"; \
+      echo "PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${gID}\`"; \
+      echo "#"; \
+      echo "sleep 15"; \
+      echo "exec /sbin/setuser autossh /usr/bin/autossh -M0 -p \${PORT_AUTOSSH} -N -R \\"; \
+      echo "  \${PORT_REMOTE}:localhost:3001 autossh@\${IP_HUB} -o ServerAliveInterval=15 \\"; \
+      echo "  -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes"; \
+    )  \
+      >> /etc/service/${SRV}/run; \
+    chmod +x /etc/service/${SRV}/run
+
+
+# Startup script for Gateway app
+#
+RUN SRV=app; \
+    mkdir -p /etc/service/${SRV}/; \
+    ( \
+      echo "#!/bin/bash"; \
+      echo ""; \
+      echo ""; \
+      echo "# Start Endpoint"; \
+      echo "#"; \
+      echo "cd /app/"; \
+      echo "/sbin/setuser app bundle exec script/delayed_job start"; \
+      echo "exec /sbin/setuser app bundle exec rails server -p 3001"; \
+      echo "/sbin/setuser app bundle exec script/delayed_job stop"; \
+    )  \
+      >> /etc/service/${SRV}/run; \
+    chmod +x /etc/service/${SRV}/run
 
 
 # Run initialization command
 #
-USER root
 CMD ["/sbin/my_init"]

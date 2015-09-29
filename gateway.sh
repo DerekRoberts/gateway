@@ -1,3 +1,4 @@
+
 #!/bin/bash
 #
 # Manages Docker containers, images and environments.  Usage formating borrowed
@@ -33,7 +34,11 @@ inform_exec ()
 	echo
 	echo "*** ${1} *** ${2}"
 	echo
-	${2}
+	${2} || \
+		{
+			echo "${2} failed!"
+			exit
+		}
 	echo
 	echo
 }
@@ -64,6 +69,7 @@ usage_help ()
 	echo "	load        Load a Docker image from .tar"
 	echo "	providers   Modify a Gateway's providers.txt"
 	echo "	configure   Configures Docker, MongoDB and bash"
+	echo "	keygen      Create id_rsa, id_rsa.pub and known_hosts"
 	echo
 	echo "'./gateway.sh COMMAND' provides more information as necessary."
 	echo
@@ -111,29 +117,30 @@ verify_gateway_id ()
 }
 
 
-# Verify a file is not owned by root
-#
-verify_owner_not_root ()
-{
-	# Expects a file name
-	OWNER=$(ls -ld ${1} | awk '{print $3}')
-	verify_condition "[ ${OWNER} != root ]" "${1} can not be owned by root"
-}
-
-
 # Verify the status of id_rsa, id_rsa.pub and known_hosts
 #
-verify_ssh_files ()
+create_ssh_files ()
 {
-	# Verify id_rsa, id_rsa.pub and known_hosts are present
-	verify_condition "[ -f ${PATH_SSH_KEYS}/id_rsa ]" "id_rsa missing from ${PATH_SSH_KEYS}"
-	verify_condition "[ -f ${PATH_SSH_KEYS}/id_rsa.pub ]" "id_rsa.pub missing from ${PATH_SSH_KEYS}"
-	verify_condition "[ -f ${PATH_SSH_KEYS}/known_hosts ]" "known_hosts missing from ${PATH_SSH_KEYS}"
+	# Create ç
+	sudo mkdir -p ${PATH_SSH_KEYS}
 
-	# Check that none of id_rsa, id_rsa.pub and known hosts are owned by root
-	verify_owner_not_root ${PATH_SSH_KEYS}/id_rsa
-	verify_owner_not_root ${PATH_SSH_KEYS}/id_rsa.pub
-	verify_owner_not_root ${PATH_SSH_KEYS}/known_hosts
+	# Create known_hosts
+	sudo /bin/bash -c "ssh-keyscan -t rsa -H ${IP_HUB} | tee -a ${PATH_SSH_KEYS}/known_hosts"
+
+	# Create id_rsa and id_rsa.pub
+	sudo ssh-keygen -b 4096 -t rsa -N '' -C "$(whoami)@$(hostname)" -f ${PATH_SSH_KEYS}/id_rsa
+
+	# Restrict access
+	sudo chmod 600 ${PATH_SSH_KEYS}/*
+
+
+	# Echo public key
+	echo
+	echo "New SSH files generated.  Please take note of the public key."
+	echo
+	cat ${PATH_SSH_KEYS}/id_rsa.pub
+	echo
+	echo
 }
 
 # Build a Docker gateway image
@@ -143,17 +150,15 @@ docker_build ()
 	# W/o Internet build fails and destroys existing images
 	verify_internet
 	inform_exec "Building gateway" "sudo docker build -t ${DOCKER_REPO_NAME} ."
+	sudo docker pull mongo
 }
 
 
-# Run a Docker gateway container
+# Run a gateway and database containers - for deployment
 #
 docker_run ()
 {
-	# Verify ssh files are in order
-	verify_ssh_files
-
-	# Check and assign parameters
+	# Check parameters and assign variables
 	[ $# -eq 1 ]||[ $# -eq 2 ]|| \
 		usage_error "run [Gateway ID#] [optional: CPSID#1,CPSID#1,...,CPSID#n]"
 	#
@@ -162,42 +167,62 @@ docker_run ()
 	#
 	verify_gateway_id ${GATEWAY_ID}
 	export GATEWAY_NAME=pdc-$(printf "%04d" ${GATEWAY_ID})
+	export DATABASE_NAME=${GATEWAY_NAME}-db
+	export GATEWAY_PORT=`expr 40000 + ${GATEWAY_ID}`
 
-	# Run a gateway
+	# Run a database and gateway
+	sudo docker run -d --name ${DATABASE_NAME} -h ${DATABASE_NAME} \
+		--restart='always' mongo --storageEngine wiredTiger || \
+		echo "NOTE: Updates should reuse existing databases"
+	#
 	inform_exec "Running gateway" \
-		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} -e gID=${GATEWAY_ID} --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
+		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} --link ${DATABASE_NAME}:database -e gID=${GATEWAY_ID} -p ${GATEWAY_PORT}:3001 --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
 
 	# If there are any CPSIDs, then pass them to the gateway
-	[ ! -z ${DOCTORS}] ]|| \
-		echo sudo docker exec -ti ${GATEWAY_NAME} /app/providers.sh add ${DOCTORS}
+	[ ${DOCTORS} == "" ]|| \
+		sudo docker exec -ti ${GATEWAY_NAME} /app/providers.sh add ${DOCTORS}
 }
 
 
-# Run pdc-0000, a test contaienr using sample data
+# Run pdc-0000 and pdc-0000-db - for testing
 #
 docker_test ()
 {
-	# Verify ssh files are in order
-	verify_ssh_files
+	# Verify id_rsa, id_rsa.pub and known_hosts are present
+	verify_condition "[ -f ${PATH_SSH_KEYS}/id_rsa ]" "id_rsa missing from ${PATH_SSH_KEYS}"
+	verify_condition "[ -f ${PATH_SSH_KEYS}/id_rsa.pub ]" "id_rsa.pub missing from ${PATH_SSH_KEYS}"
+	verify_condition "[ -f ${PATH_SSH_KEYS}/known_hosts ]" "known_hosts missing from ${PATH_SSH_KEYS}"
+
+	# Verify transparent_hugepage and its defrag are disabled
+	verify_condition "grep --quiet \[never\] /sys/kernel/mm/transparent_hugepage/enabled" "grep '\[never\]' /sys/kernel/mm/transparent_hugepage/enabled"
+	verify_condition "grep --quiet \[never\] /sys/kernel/mm/transparent_hugepage/defrag" "Disable transparent hugepage's defrag"
+
+	# Assign variables
+	export GATEWAY_ID=${TEST_GATEWAY}
+	export GATEWAY_NAME=pdc-$(printf "%04d" ${GATEWAY_ID})
+	export DATABASE_NAME=${GATEWAY_NAME}-db
+	export GATEWAY_PORT=`expr 40000 + ${GATEWAY_ID}`
+
+	# Run a database and gateway
+	sudo docker run -d --name ${DATABASE_NAME} -h ${DATABASE_NAME} --restart='always' -v ${SCRIPT_DIR}/util/:/util/:ro mongo --storageEngine wiredTiger || echo "NOTE: Updates should reuse existing databases"
 
 	# Run a gateway
 	inform_exec "Running test gateway" \
-		"sudo docker run -d --name pdc-0000 -h pdc-0000 -e gID=0 --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
+		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} --link ${DATABASE_NAME}:database -e gID=${GATEWAY_ID} -p ${GATEWAY_PORT}:3001 --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
 
 	# Import sample data
 	sleep 2
-	inform_exec "Importing sample data" \
-		"sudo docker exec -ti pdc-0000 /app/util/sample10/import.sh"
+	sudo docker exec -ti ${DATABASE_NAME} /util/sample10/import.sh
 
 	# Inspect container
 	inform_exec "Inspecting container" \
-		"sudo docker inspect pdc-0000"
+		"sudo docker inspect ${GATEWAY_NAME}"
 
 	# Tail logs
 	echo "Press Enter when to tail logs and/or ctrl-C to cancel"
 	read ENTER_HERE
 	inform_exec "Tailing logs" \
-		"sudo docker logs -f pdc-0000"
+		"sudo docker logs -f ${GATEWAY_NAME}"
 }
 
 
@@ -236,12 +261,15 @@ docker_providers ()
 }
 
 
-# Save (export) the current gateway image to a .tar file
+# Save (export) the current gateway and mongo images to tar files
 #
 docker_save ()
 {
-	OUTPUT="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}"
-	inform_exec "Saving gateway image" "sudo docker save -o ${OUTPUT} ${DOCKER_REPO_NAME}"
+	GATEWAY_OUT="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}.tar"
+	DATABASE_OUT="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}-db.tar"
+	#
+	inform_exec "Saving gateway image" "sudo docker save -o ${GATEWAY_OUT} ${DOCKER_REPO_NAME}"
+	inform_exec "Saving gateway image" "sudo docker save -o ${DATABASE_OUT} mongo"
 }
 
 
@@ -250,11 +278,21 @@ docker_save ()
 docker_load ()
 {
 	# Verify input file is present
-	INPUT="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}"
-	verify_condition "[ -f ${INPUT} ]" \
-		"Verify ${INPUT} is present"
+	GATEWAY_IN="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}.tar"
+	DATABASE_IN="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}-db.tar"
+	#
+	if [ -f ${GATEWAY_IN} ]
+	then
+		inform_exec "Loading gateway image" "sudo docker load -i ${GATEWAY_IN}"
+	else
+		echo "${GATEWAY_IN} not found/loaded"
+	fi
 
-	inform_exec "Loading gateway image" "sudo docker load -i ${INPUT}"
+	if [ -f ${DATABASE_IN} ]; then
+		inform_exec "Loading gateway image" "sudo docker load -i ${DATABASE_IN}"
+	else
+		echo "${GATEWAY_IN} not found/loaded"
+	fi
 }
 
 
@@ -272,8 +310,8 @@ docker_configure ()
 
 	# Configure MongoDB
 	#
-	( echo never | sudo tee /sys/kernel/mm/transparent_hugepage/enabled )> /dev/null
-	( echo never | sudo tee /sys/kernel/mm/transparent_hugepage/defrag )> /dev/null
+	echo never | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
+	echo never | sudo tee /sys/kernel/mm/transparent_hugepage/defrag
 
 	# Configure ~/.bashrc, if necessary
 	#
@@ -303,8 +341,6 @@ docker_configure ()
 			echo "alias l='sudo docker logs -f'"; \
 			echo "alias p='sudo docker ps -a'"; \
 			echo "alias s='sudo docker ps -a | less -S'"; \
-			echo "alias m='make'"; \
-			echo "alias ggraph='git log --oneline --graph --decorate --color'"; \
 		) | tee -a ${HOME}/.bashrc; \
 		echo ""; \
 		echo ""; \
@@ -341,6 +377,12 @@ SCRIPT_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source ${SCRIPT_DIR}/config.env
 
 
+# If DNS is disabled (,, = lowercase, bash 4+), then use --dns-search=.
+#
+[ "${DNS_DISABLE,,}" != "yes" ] || \
+	export DOCKER_ENDPOINT="${DOCKER_ENDPOINT} --dns-search=."
+
+
 # Run based on command
 #
 case "${COMMAND}" in
@@ -351,6 +393,7 @@ case "${COMMAND}" in
 	"save"        ) docker_save;;
 	"load"        ) docker_load;;
 	"providers"   ) docker_providers ${OPTION} ${ARG_1} ${ARG_2};;
-	"configure"   )	docker_configure;;
-	*             ) usage_help;;
+	"configure"   ) docker_configure;;
+	"keygen"      ) create_ssh_files;;
+	*             ) usage_help
 esac

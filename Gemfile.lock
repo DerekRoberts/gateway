@@ -1,5 +1,5 @@
 GIT
-  remote: http://github.com/physiciansdatacollaborative/health-data-standards.git
+  remote: http://github.com/pdcbc/health-data-standards.git
   revision: 8caf81d44431b486a109545e2b04fda248f8cdc1
   branch: master
   specs:
@@ -12,7 +12,7 @@ GIT
       uuid (~> 2.3.5)
 
 GIT
-  remote: http://github.com/physiciansdatacollaborative/hqmf-parser.git
+  remote: http://github.com/pdcbc/hqmf-parser.git
   revision: 7255b22df28004a00721209b8a9f3ff708c2028d
   branch: master
   specs:
@@ -23,7 +23,7 @@ GIT
       spreadsheet (= 0.6.8)
 
 GIT
-  remote: http://github.com/physiciansdatacollaborative/hqmf2js.git
+  remote: http://github.com/pdcbc/hqmf2js.git
   revision: cfc4af98da3f516899c9614ecd673d7f23e9e461
   branch: master
   specs:
@@ -34,7 +34,7 @@ GIT
       tilt (~> 1.4.1)
 
 GIT
-  remote: http://github.com/physiciansdatacollaborative/patientapi.git
+  remote: http://github.com/pdcbc/patientapi.git
   revision: 8cfb50a53396180b652737f406d5cc2d9e5e3cb5
   branch: master
   specs:
