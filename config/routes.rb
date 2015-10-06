@@ -11,7 +11,7 @@ QueryGateway::Application.routes.draw do
   get 'sysinfo/delayed_job', :constraints => {:ip => /127.0.0.1/}
 
   resources :results, :only => [:index, :show]
-  
+
   resources :queries
   post 'queries/upload_hqmf', :constraints => {:ip => /127.0.0.1/}
 
@@ -24,17 +24,18 @@ QueryGateway::Application.routes.draw do
   get 'pmn/GetResponse/:id', :to => 'pmn#get_response', :constraints => {:ip => /127.0.0.1/}
   get 'pmn/GetResponseDocument/:id/:doc_id/:offset', :to => 'pmn#doc', :constraints => {:ip => /127.0.0.1/}
   get 'pmn/Close/:id', :to => 'pmn#close', :constraints => {:ip => /127.0.0.1/}
-  
+
   get 'hdata/index', :constraints => {:ip => /127.0.0.1/}
   get 'hdata/root', :constraints => {:ip => /127.0.0.1/}
 
-  post 'records/create', :constraints => {:ip => /127.0.0.1/}
+  post 'records/create'
+  #, :constraints => {:ip => /127.0.0.1/}
   delete 'records/destroy', :constraints => {:ip => /127.0.0.1/}
-  
+
   post 'library_functions', :to => "library_functions#create", :constraints => {:ip => /127.0.0.1/}
-  
+
   root :to => 'queries#index'
-  
+
   # The priority is based upon order of creation:
   # first created -> highest priority.
 
