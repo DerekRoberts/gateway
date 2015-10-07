@@ -61,12 +61,9 @@ usage_help ()
 	echo "Usage: ./gateway.sh COMMAND [OPTIONS] [arguments]"
 	echo
 	echo "Commands:"
-	echo "	build       Build a Docker image"
 	echo "	run         Run a new Docker container"
 	echo "	rm          Remove a Docker container"
 	echo "	test        Run and inspect test container pdc-0000"
-	echo "	save        Save the current Docker image as .tar"
-	echo "	load        Load a Docker image from .tar"
 	echo "	providers   Modify a Gateway's providers.txt"
 	echo "	configure   Configures Docker, MongoDB and bash"
 	echo "	keygen      Create id_rsa, id_rsa.pub and known_hosts"
@@ -85,17 +82,6 @@ verify_condition ()
 	if ! ( ${1} )
 	then
 		inform_exit "ERROR: ${2}"
-	fi
-}
-
-
-# Check Internet connectivity
-#
-verify_internet ()
-{
-	if [[ "$(ping -c 1 8.8.8.8 | grep '100% packet loss' )" != "" ]]
-	then
-	    inform_exit "ERROR: Build requires an Internet connection"
 	fi
 }
 
@@ -121,36 +107,32 @@ verify_gateway_id ()
 #
 create_ssh_files ()
 {
-	# Create ç
-	sudo mkdir -p ${PATH_SSH_KEYS}
-
-	# Create known_hosts
-	sudo /bin/bash -c "ssh-keyscan -t rsa -H ${IP_HUB} | tee -a ${PATH_SSH_KEYS}/known_hosts"
-
-	# Create id_rsa and id_rsa.pub
-	sudo ssh-keygen -b 4096 -t rsa -N '' -C "$(whoami)@$(hostname)" -f ${PATH_SSH_KEYS}/id_rsa
-
-	# Restrict access
-	sudo chmod 600 ${PATH_SSH_KEYS}/*
-
+	# Create data container for ssh details
+	sudo docker run -d --name ${DATA_CONTAINER} -h ${DATA_CONTAINER} -v /home/autossh/.ssh/ --env-file=config.env --restart='always' phusion/baseimage
 
 	# Echo public key
 	echo
 	echo "New SSH files generated.  Please take note of the public key."
 	echo
-	cat ${PATH_SSH_KEYS}/id_rsa.pub
+	sudo docker exec ${DATA_CONTAINER} /bin/bash -c 'ssh-keygen -b 4096 -t rsa -N "" -C "$(whoami)@$(hostname)-$(date +"%Y-%m-%d-%T")" -f ~/.ssh/id_rsa'
+	sudo docker exec ${DATA_CONTAINER} /bin/bash -c 'cat /root/.ssh/id_rsa.pub'
 	echo
 	echo
-}
 
-# Build a Docker gateway image
-#
-docker_build ()
-{
-	# W/o Internet build fails and destroys existing images
-	verify_internet
-	inform_exec "Building gateway" "sudo docker build -t ${DOCKER_REPO_NAME} ."
-	sudo docker pull mongo
+	# Test the key, generating a known_hosts file, otherwise remove container
+	echo "Press enter when that key ready to test this key"
+	echo
+	read ENTER_TO_CONTINUE
+	sudo docker exec -ti ${DATA_CONTAINER} /bin/bash -c 'ssh -p ${PORT_AUTOSSH} autossh@${IP_HUB} -o StrictHostKeyChecking=no "hostname; exit"'
+
+	# Copy files to expected location
+	sudo docker exec ${DATA_CONTAINER} /bin/bash -c 'mkdir -p /home/autossh/.ssh/'
+	sudo docker exec ${DATA_CONTAINER} /bin/bash -c 'cp /root/.ssh/* /home/autossh/.ssh/'
+	echo
+	echo
+	echo "Success!"
+	echo
+	echo
 }
 
 
@@ -158,6 +140,10 @@ docker_build ()
 #
 docker_run ()
 {
+	# Verify transparent_hugepage and its defrag are disabled
+	verify_condition "grep --quiet \[never\] /sys/kernel/mm/transparent_hugepage/enabled" "grep '\[never\]' /sys/kernel/mm/transparent_hugepage/enabled"
+	verify_condition "grep --quiet \[never\] /sys/kernel/mm/transparent_hugepage/defrag" "Disable transparent hugepage's defrag"
+
 	# Check parameters and assign variables
 	[ $# -eq 1 ]||[ $# -eq 2 ]|| \
 		usage_error "run [Gateway ID#] [optional: CPSID#1,CPSID#1,...,CPSID#n]"
@@ -165,7 +151,7 @@ docker_run ()
 	export GATEWAY_ID=${1}
 	export DOCTORS=${2:-""}
 	#
-	verify_gateway_id ${GATEWAY_ID}
+	[ ${DOCTORS} = "cpsid" ] || verify_gateway_id ${GATEWAY_ID}
 	export GATEWAY_NAME=pdc-$(printf "%04d" ${GATEWAY_ID})
 	export DATABASE_NAME=${GATEWAY_NAME}-db
 	export GATEWAY_PORT=`expr 40000 + ${GATEWAY_ID}`
@@ -176,7 +162,11 @@ docker_run ()
 		echo "NOTE: Updates should reuse existing databases"
 	#
 	inform_exec "Running gateway" \
-		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} --link ${DATABASE_NAME}:database -e gID=${GATEWAY_ID} -p ${GATEWAY_PORT}:3001 --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
+		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} \
+			--link ${DATABASE_NAME}:database -e gID=${GATEWAY_ID} \
+			-p ${GATEWAY_PORT}:3001 --volumes-from ${DATA_CONTAINER} \
+			--env-file=config.env --restart='always' \
+			${DOCKER_ENDPOINT} pdcbc/gateway"
 
 	# If there are any CPSIDs, then pass them to the gateway
 	[ ${DOCTORS} == "" ]|| \
@@ -188,31 +178,19 @@ docker_run ()
 #
 docker_test ()
 {
-	# Verify id_rsa, id_rsa.pub and known_hosts are present
-	verify_condition "[ -f ${PATH_SSH_KEYS}/id_rsa ]" "id_rsa missing from ${PATH_SSH_KEYS}"
-	verify_condition "[ -f ${PATH_SSH_KEYS}/id_rsa.pub ]" "id_rsa.pub missing from ${PATH_SSH_KEYS}"
-	verify_condition "[ -f ${PATH_SSH_KEYS}/known_hosts ]" "known_hosts missing from ${PATH_SSH_KEYS}"
+	docker_run ${TEST_GATEWAY} cpsid
 
-	# Verify transparent_hugepage and its defrag are disabled
-	verify_condition "grep --quiet \[never\] /sys/kernel/mm/transparent_hugepage/enabled" "grep '\[never\]' /sys/kernel/mm/transparent_hugepage/enabled"
-	verify_condition "grep --quiet \[never\] /sys/kernel/mm/transparent_hugepage/defrag" "Disable transparent hugepage's defrag"
-
-	# Assign variables
-	export GATEWAY_ID=${TEST_GATEWAY}
-	export GATEWAY_NAME=pdc-$(printf "%04d" ${GATEWAY_ID})
-	export DATABASE_NAME=${GATEWAY_NAME}-db
-	export GATEWAY_PORT=`expr 40000 + ${GATEWAY_ID}`
-
-	# Run a database and gateway
-	sudo docker run -d --name ${DATABASE_NAME} -h ${DATABASE_NAME} --restart='always' -v ${SCRIPT_DIR}/util/:/util/:ro mongo --storageEngine wiredTiger || echo "NOTE: Updates should reuse existing databases"
-
-	# Run a gateway
-	inform_exec "Running test gateway" \
-		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} --link ${DATABASE_NAME}:database -e gID=${GATEWAY_ID} -p ${GATEWAY_PORT}:3001 --env-file=config.env --restart='always' ${DOCKER_ENDPOINT} ${DOCKER_REPO_NAME}"
-
-	# Import sample data
+	# Import sample data (import.sh fails as error)
 	sleep 2
-	sudo docker exec -ti ${DATABASE_NAME} /util/sample10/import.sh
+	sudo docker exec -ti ${DATABASE_NAME} mkdir -p /util/sample10/
+	sudo docker exec -ti ${DATABASE_NAME} /bin/bash -c 'curl \
+		https://raw.githubusercontent.com/PDCbc/gateway/master/util/sample10/sample.json \
+		> /util/sample10/sample.json'
+	sudo docker exec -ti ${DATABASE_NAME} /bin/bash -c 'curl \
+		https://raw.githubusercontent.com/PDCbc/gateway/master/util/sample10/import.sh \
+		> /util/sample10/import.sh'
+	sudo docker exec -ti ${DATABASE_NAME} chmod +x /util/sample10/import.sh
+	sudo docker exec -ti ${DATABASE_NAME} /util/sample10/import.sh || true
 
 	# Inspect container
 	inform_exec "Inspecting container" \
@@ -258,41 +236,6 @@ docker_providers ()
 	# Pass parameters to providers.sh on gateway
 	inform_exec "Modifying providers for ${GATEWAY_NAME}" \
 		"sudo docker exec -ti ${GATEWAY_NAME} /sbin/setuser app /app/providers.sh ${ADD_REMOVE} ${DOCTORS}"
-}
-
-
-# Save (export) the current gateway and mongo images to tar files
-#
-docker_save ()
-{
-	GATEWAY_OUT="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}.tar"
-	DATABASE_OUT="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}-db.tar"
-	#
-	inform_exec "Saving gateway image" "sudo docker save -o ${GATEWAY_OUT} ${DOCKER_REPO_NAME}"
-	inform_exec "Saving gateway image" "sudo docker save -o ${DATABASE_OUT} mongo"
-}
-
-
-# Load (import) pdc.io-gateway.tar as the new gateway image
-#
-docker_load ()
-{
-	# Verify input file is present
-	GATEWAY_IN="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}.tar"
-	DATABASE_IN="${SCRIPT_DIR}/${DOCKER_SAVE_NAME}-db.tar"
-	#
-	if [ -f ${GATEWAY_IN} ]
-	then
-		inform_exec "Loading gateway image" "sudo docker load -i ${GATEWAY_IN}"
-	else
-		echo "${GATEWAY_IN} not found/loaded"
-	fi
-
-	if [ -f ${DATABASE_IN} ]; then
-		inform_exec "Loading gateway image" "sudo docker load -i ${DATABASE_IN}"
-	else
-		echo "${GATEWAY_IN} not found/loaded"
-	fi
 }
 
 
@@ -358,7 +301,7 @@ docker_configure ()
 # Expected input
 #
 # $0 this script
-# $1 Command: e.g. build, add, remove
+# $1 Command: e.g. test, run, remove
 # $2 Option: e.g. nothing, gateway ID, image name
 # $3 Argument: e.g. nothing, doctor IDs, output path
 
@@ -386,12 +329,9 @@ source ${SCRIPT_DIR}/config.env
 # Run based on command
 #
 case "${COMMAND}" in
-	"build"       ) docker_build;;
 	"run"         ) docker_run ${OPTION} ${ARG_1};;
 	"test"        ) docker_test;;
 	"rm"          ) docker_rm;;
-	"save"        ) docker_save;;
-	"load"        ) docker_load;;
 	"providers"   ) docker_providers ${OPTION} ${ARG_1} ${ARG_2};;
 	"configure"   ) docker_configure;;
 	"keygen"      ) create_ssh_files;;
