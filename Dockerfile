@@ -6,9 +6,7 @@
 # - Set Hub IP addr: -e IP_HUB=#.#.#.#
 # - Use an env file: --env-file=/path/to/file.env
 #
-# Note: deployment Dockerfile uses git clone, not copy
-#
-# Samples at https://github.com/pdcbc/endpoint.git
+# Samples at https://github.com/physiciansdatacollaborative/endpoint.git
 
 
 # Base image
@@ -33,6 +31,7 @@ RUN echo 'Dpkg::Options{ "--force-confdef"; "--force-confold" }' \
 # Prepare /app/ folder
 #
 WORKDIR /app/
+#RUN git clone https://github.com/physiciansdatacollaborative/endpoint.git -b dev .; \
 COPY . .
 RUN mkdir -p ./tmp/pids ./util/files; \
     gem install multipart-post; \
@@ -53,7 +52,6 @@ RUN SRV=autossh; \
     mkdir -p /etc/service/${SRV}/; \
     ( \
       echo "#!/bin/bash"; \
-      echo "set -e -o nounset"; \
       echo ""; \
       echo ""; \
       echo "# Set variable defaults"; \
@@ -69,10 +67,11 @@ RUN SRV=autossh; \
       echo "export AUTOSSH_PIDFILE=/home/autossh/autossh_gateway.pid"; \
       echo "PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${gID}\`"; \
       echo "#"; \
-      echo "sleep 15"; \
+      echo "sleep 30"; \
+      echo "chown -R autossh:autossh /home/autossh"; \
       echo "exec /sbin/setuser autossh /usr/bin/autossh -M0 -p \${PORT_AUTOSSH} -N -R \\"; \
       echo "  \${PORT_REMOTE}:localhost:3001 autossh@\${IP_HUB} -o ServerAliveInterval=15 \\"; \
-      echo "  -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes"; \
+      echo "  -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes -v"; \
     )  \
       >> /etc/service/${SRV}/run; \
     chmod +x /etc/service/${SRV}/run
@@ -88,10 +87,11 @@ RUN SRV=app; \
       echo ""; \
       echo "# Start Endpoint"; \
       echo "#"; \
+      echo "sleep 15"; \
       echo "cd /app/"; \
+      echo "/sbin/setuser app bundle exec script/delayed_job stop"; \
       echo "/sbin/setuser app bundle exec script/delayed_job start"; \
       echo "exec /sbin/setuser app bundle exec rails server -p 3001"; \
-      echo "/sbin/setuser app bundle exec script/delayed_job stop"; \
     )  \
       >> /etc/service/${SRV}/run; \
     chmod +x /etc/service/${SRV}/run
