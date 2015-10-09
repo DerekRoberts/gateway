@@ -6,13 +6,20 @@
 # - Set Hub IP addr: -e IP_HUB=#.#.#.#
 # - Use an env file: --env-file=/path/to/file.env
 #
-# Samples at https://github.com/physiciansdatacollaborative/endpoint.git
+# E.g.:
+#
+# Samples at https://github.com/pdcbc/endpoint.git
 
 
 # Base image
 #
-FROM phusion/passenger-ruby19
+FROM phusion/passenger-ruby19:0.9.17
 MAINTAINER derek.roberts@gmail.com
+
+
+# Set Gateway release tag (https://github.com/PDCbc/gateway/releases)
+#
+ENV RELEASE_GATEWAY 0.1.4
 
 
 # Update system and packages
@@ -31,9 +38,8 @@ RUN echo 'Dpkg::Options{ "--force-confdef"; "--force-confold" }' \
 # Prepare /app/ folder
 #
 WORKDIR /app/
-#RUN git clone https://github.com/physiciansdatacollaborative/endpoint.git -b dev .; \
-COPY . .
-RUN mkdir -p ./tmp/pids ./util/files; \
+RUN git clone https://github.com/pdcbc/gateway.git -b ${RELEASE_GATEWAY} .; \
+    mkdir -p ./tmp/pids ./util/files; \
     gem install multipart-post; \
     sed -i -e "s/localhost:27017/database:27017/" config/mongoid.yml; \
     chown -R app:app /app/; \
