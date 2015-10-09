@@ -88,17 +88,6 @@ verify_condition ()
 }
 
 
-# Check Internet connectivity
-#
-verify_internet ()
-{
-	if [[ "$(ping -c 1 8.8.8.8 | grep '100% packet loss' )" != "" ]]
-	then
-	    inform_exit "ERROR: Build requires an Internet connection"
-	fi
-}
-
-
 # Verify that GATEWAY_ID is an integer 1 - 999
 #
 verify_gateway_id ()
@@ -249,7 +238,6 @@ docker_test ()
 docker_dev ()
 {
 	# W/o Internet build fails and destroys existing images
-	verify_internet
 	inform_exec "Building gateway" "sudo docker build -t local/gateway ."
 	sudo docker pull mongo
 
