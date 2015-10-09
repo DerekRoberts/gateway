@@ -347,6 +347,23 @@ docker_configure ()
 	echo never | sudo tee /sys/kernel/mm/transparent_hugepage/defrag
 
 
+	# Disable Transparent Hugepage for MongoDB, after reboots
+	if(! grep --quiet 'never > /sys/kernel/mm/transparent_hugepage/enabled' /etc/rc.local ); \
+	then \
+		sudo sed -i '/exit 0/d' /etc/rc.local; \
+		( \
+			echo ''; \
+			echo '# Disable Transparent Hugepage, for Mongo'; \
+			echo '#'; \
+			echo 'echo never > /sys/kernel/mm/transparent_hugepage/enabled'; \
+			echo 'echo never > /sys/kernel/mm/transparent_hugepage/defrag'; \
+			echo ''; \
+			echo 'exit 0'; \
+		) | sudo tee -a /etc/rc.local; \
+	fi
+	sudo chmod 755 /etc/rc.local
+
+
 	# Configure ~/.bashrc, if necessary
 	if(! grep --quiet 'function dockin()' ${HOME}/.bashrc ); \
 	then \
