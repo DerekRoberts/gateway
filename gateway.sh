@@ -58,15 +58,17 @@ usage_error ()
 usage_help ()
 {
 	echo
-	echo "Usage: ./gateway.sh COMMAND [OPTIONS] [arguments]"
+	echo "This script creates Gateways in Docker containers"
+	echo
+	echo "Usage: ./gateway.sh COMMAND [arguments]"
 	echo
 	echo "Commands:"
-	echo "	run         Run a new Docker container"
-	echo "	rm          Remove a Docker container"
-	echo "	test        Run and inspect test container pdc-0000"
-	echo "	providers   Modify a Gateway's providers.txt"
+	echo "	run         Run a new Gateway"
+	echo "	test        Run and inspect a test Gateway"
+	echo "	providers   Modify a Gateway's providers list"
 	echo "	configure   Configures Docker, MongoDB and bash"
-	echo "	keygen      Create id_rsa, id_rsa.pub and known_hosts"
+	echo "	keygen      Run a keyholder for SSH keys"
+	echo "	develop     Build and test a local Dockerfile"
 	echo
 	echo "'./gateway.sh COMMAND' provides more information as necessary."
 	echo
@@ -82,6 +84,17 @@ verify_condition ()
 	if ! ( ${1} )
 	then
 		inform_exit "ERROR: ${2}"
+	fi
+}
+
+
+# Check Internet connectivity
+#
+verify_internet ()
+{
+	if [[ "$(ping -c 1 8.8.8.8 | grep '100% packet loss' )" != "" ]]
+	then
+	    inform_exit "ERROR: Build requires an Internet connection"
 	fi
 }
 
@@ -105,7 +118,7 @@ verify_gateway_id ()
 
 # Verify the status of id_rsa, id_rsa.pub and known_hosts
 #
-create_ssh_files ()
+docker_keygen ()
 {
 	# Create data container for ssh details
 	sudo docker run -d --name ${DATA_CONTAINER} -h ${DATA_CONTAINER} -v /home/autossh/.ssh/ --env-file=config.env --restart='always' phusion/baseimage
@@ -136,7 +149,31 @@ create_ssh_files ()
 }
 
 
-# Run a gateway and database containers - for deployment
+# Import Sample10 data
+#
+import_sample ()
+{
+	# Assign parameters
+	[ $# -eq 1 ]|| \
+		usage_error "sample10 [Database Container]"
+	#
+	export DATABASE_NAME=${1}
+
+	# Import sample data (import.sh fails as error)
+	sleep 2
+	sudo docker exec -ti ${DATABASE_NAME} /bin/bash -c "mkdir -p /sample_data/"
+	sudo docker exec -ti ${DATABASE_NAME} /bin/bash -c 'curl \
+		https://raw.githubusercontent.com/PDCbc/gateway/master/util/sample10/sample.json \
+		> /sample_data/sample.json'
+	sudo docker exec -ti ${DATABASE_NAME} /bin/bash -c 'curl \
+		https://raw.githubusercontent.com/PDCbc/gateway/master/util/sample10/import.sh \
+		> /sample_data/import.sh'
+	sudo docker exec -ti ${DATABASE_NAME} /bin/bash -c "chmod +x /sample_data/import.sh"
+	sudo docker exec -ti ${DATABASE_NAME} /bin/bash -c "/sample_data/import.sh" || true
+}
+
+
+# Run a gateway and database containers
 #
 docker_run ()
 {
@@ -156,11 +193,17 @@ docker_run ()
 	export DATABASE_NAME=${GATEWAY_NAME}-db
 	export GATEWAY_PORT=`expr 40000 + ${GATEWAY_ID}`
 
-	# Run a database and gateway
+	# Run a database and set the index (for duplicates)
 	sudo docker run -d --name ${DATABASE_NAME} -h ${DATABASE_NAME} \
 		--restart='always' mongo --storageEngine wiredTiger || \
 		echo "NOTE: Updates should reuse existing databases"
 	#
+	sudo docker exec -ti ${DATABASE_NAME} /bin/bash -c \
+		"mongo query_gateway_development --eval \
+  	'printjson( db.records.ensureIndex({ hash_id : 1 }, { unique : true }))'"
+
+	# Run a gateway, deleting any old instances
+	sudo docker rm -fv ${GATEWAY_NAME} || true
 	inform_exec "Running gateway" \
 		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} \
 			--link ${DATABASE_NAME}:database -e gID=${GATEWAY_ID} \
@@ -178,19 +221,68 @@ docker_run ()
 #
 docker_test ()
 {
-	docker_run ${TEST_GATEWAY} cpsid
+	# Assign variables
+	export GATEWAY_ID=${TEST_GATEWAY:-0}
+	export GATEWAY_NAME=pdc-$(printf "%04d" ${GATEWAY_ID})
+	export DATABASE_NAME=${GATEWAY_NAME}-db
 
-	# Import sample data (import.sh fails as error)
-	sleep 2
-	sudo docker exec -ti ${DATABASE_NAME} mkdir -p /util/sample10/
-	sudo docker exec -ti ${DATABASE_NAME} /bin/bash -c 'curl \
-		https://raw.githubusercontent.com/PDCbc/gateway/master/util/sample10/sample.json \
-		> /util/sample10/sample.json'
-	sudo docker exec -ti ${DATABASE_NAME} /bin/bash -c 'curl \
-		https://raw.githubusercontent.com/PDCbc/gateway/master/util/sample10/import.sh \
-		> /util/sample10/import.sh'
-	sudo docker exec -ti ${DATABASE_NAME} chmod +x /util/sample10/import.sh
-	sudo docker exec -ti ${DATABASE_NAME} /util/sample10/import.sh || true
+	# Run a test gateway
+	docker_run ${GATEWAY_ID} cpsid
+
+	# Import sample data
+	import_sample ${DATABASE_NAME}
+
+	# Inspect container
+	inform_exec "Inspecting container" \
+		"sudo docker inspect ${GATEWAY_NAME}"
+
+	# Tail logs
+	echo "Press Enter when to tail logs and/or ctrl-C to cancel"
+	read ENTER_HERE
+	inform_exec "Tailing logs" \
+		"sudo docker logs -f ${GATEWAY_NAME}"
+}
+
+
+# Build a Docker gateway image
+#
+docker_dev ()
+{
+	# W/o Internet build fails and destroys existing images
+	verify_internet
+	inform_exec "Building gateway" "sudo docker build -t local/gateway ."
+	sudo docker pull mongo
+
+	# Verify transparent_hugepage and its defrag are disabled
+	verify_condition "grep --quiet \[never\] /sys/kernel/mm/transparent_hugepage/enabled" "grep '\[never\]' /sys/kernel/mm/transparent_hugepage/enabled"
+	verify_condition "grep --quiet \[never\] /sys/kernel/mm/transparent_hugepage/defrag" "Disable transparent hugepage's defrag"
+
+	# Assign variables
+	export GATEWAY_ID=${TEST_GATEWAY:-0}
+	export GATEWAY_NAME=pdc-$(printf "%04d" ${GATEWAY_ID})
+	export DATABASE_NAME=${GATEWAY_NAME}-db
+	export GATEWAY_PORT=`expr 40000 + ${GATEWAY_ID}`
+
+	# Run a database and set the index (for duplicates)
+	sudo docker run -d --name ${DATABASE_NAME} -h ${DATABASE_NAME} \
+		--restart='always' mongo --storageEngine wiredTiger || \
+		echo "NOTE: Updates should reuse existing databases"
+	#
+	sudo docker exec -ti ${DATABASE_NAME} /bin/bash -c \
+		"mongo query_gateway_development --eval \
+  	'printjson( db.records.ensureIndex({ hash_id : 1 }, { unique : true }))'"
+
+	# Run an endpoint, removing any previous versions
+	sudo docker rm -fv ${GATEWAY_NAME} || true
+	inform_exec "Running gateway" \
+		"sudo docker run -d --name ${GATEWAY_NAME} -h ${GATEWAY_NAME} \
+			--link ${DATABASE_NAME}:database -e gID=${GATEWAY_ID} \
+			-p ${GATEWAY_PORT}:3001 --volumes-from ${DATA_CONTAINER} \
+			--env-file=config.env --restart='always' \
+			${DOCKER_ENDPOINT} local/gateway"
+
+	# Import sample data
+	import_sample ${DATABASE_NAME}
 
 	# Inspect container
 	inform_exec "Inspecting container" \
@@ -242,7 +334,6 @@ docker_providers ()
 docker_configure ()
 {
 	# Install Docker, if necessary
-	#
 	( which docker )|| \
 		( \
 			sudo apt-get update
@@ -251,13 +342,12 @@ docker_configure ()
 			wget -qO- https://get.docker.com/ | sh; \
 		)
 
-	# Configure MongoDB
-	#
+	# Disable Transparent Hugepages for MongoDB, while running
 	echo never | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
 	echo never | sudo tee /sys/kernel/mm/transparent_hugepage/defrag
 
+
 	# Configure ~/.bashrc, if necessary
-	#
 	if(! grep --quiet 'function dockin()' ${HOME}/.bashrc ); \
 	then \
 		( \
@@ -331,9 +421,9 @@ source ${SCRIPT_DIR}/config.env
 case "${COMMAND}" in
 	"run"         ) docker_run ${OPTION} ${ARG_1};;
 	"test"        ) docker_test;;
-	"rm"          ) docker_rm;;
 	"providers"   ) docker_providers ${OPTION} ${ARG_1} ${ARG_2};;
 	"configure"   ) docker_configure;;
-	"keygen"      ) create_ssh_files;;
+	"keygen"      ) docker_keygen;;
+	"develop"     ) docker_dev;;
 	*             ) usage_help
 esac
