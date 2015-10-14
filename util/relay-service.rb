@@ -36,6 +36,7 @@ class RecordRelayServlet < HTTPServlet::AbstractServlet
         end
       end
       response.body = res.body
+      puts res.body
     end
     raise HTTPStatus::OK
   end

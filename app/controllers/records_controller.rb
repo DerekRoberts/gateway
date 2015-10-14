@@ -69,8 +69,12 @@ class RecordsController < ApplicationController
               	      provider_hash = OpenSSL::Digest::SHA224.new
         	      provider_hash << provider_id 
         	      patient.primary_care_provider_id = Base64.strict_encode64(provider_hash.digest)
-        	    end 
-
+        	    end
+              #
+              ### Example of how to capture E2E document for debugging purposes
+              ### if patient[:_id] == '149'
+              ###   File.open("#{Rails.root}/log/149.xml", 'wb') { |file| file.write(xml_file) }
+              ### end
               # patient.save! isn't working as documented, don't know why
               # appears that it should but upsert does what we need.  See
               #  http://mongoid.org/en/mongoid/docs/persistence.html
@@ -87,6 +91,8 @@ class RecordsController < ApplicationController
     else
         render :text => 'Unknown XML Format', :status => 400
     end
+
+    puts 'done!'
   end
 
   # Determines if the provider for this document has 
