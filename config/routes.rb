@@ -1,30 +1,41 @@
 QueryGateway::Application.routes.draw do
 
-  resources :results, :only => [:index, :show]
-  
-  resources :queries
-  post 'queries/upload_hqmf'
+  get 'sysinfo/load', :constraints => {:ip => /127.0.0.1/}
+  get 'sysinfo/users', :constraints => {:ip => /127.0.0.1/}
+  get 'sysinfo/diskspace', :constraints => {:ip => /127.0.0.1/}
+  get 'sysinfo/mongo', :constraints => {:ip => /127.0.0.1/}
+  get 'sysinfo/processes', :constraints => {:ip => /127.0.0.1/}
+  get 'sysinfo/swap', :constraints => {:ip => /127.0.0.1/}
+  get 'sysinfo/import', :constraints => {:ip => /127.0.0.1/}
+  get 'sysinfo/tomcat', :constraints => {:ip => /127.0.0.1/}
+  get 'sysinfo/delayed_job', :constraints => {:ip => /127.0.0.1/}
 
-  post 'pmn/create' # not sure why this required given the following line but tests break without it
-  post 'pmn/PostRequest/:pmn_request_id', :to => 'pmn#create'
-  post 'pmn/PostRequestDocument/:id/:doc_id/:offset', :to => 'pmn#add'
-  put 'pmn/Start/:id', :to => 'pmn#start'
-  post 'pmn/Stop/:id', :to => 'pmn#stop'
-  get 'pmn/GetStatus/:id', :to => 'pmn#status'
-  get 'pmn/GetResponse/:id', :to => 'pmn#get_response'
-  get 'pmn/GetResponseDocument/:id/:doc_id/:offset', :to => 'pmn#doc'
-  get 'pmn/Close/:id', :to => 'pmn#close'
-  
-  get 'hdata/index'
-  get 'hdata/root'
+  resources :results, :only => [:index, :show]
+
+  resources :queries
+  post 'queries/upload_hqmf', :constraints => {:ip => /127.0.0.1/}
+
+  post 'pmn/create', :constraints => {:ip => /127.0.0.1/} # not sure why this required given the following line but tests break without it
+  post 'pmn/PostRequest/:pmn_request_id', :to => 'pmn#create', :constraints => {:ip => /127.0.0.1/}
+  post 'pmn/PostRequestDocument/:id/:doc_id/:offset', :to => 'pmn#add', :constraints => {:ip => /127.0.0.1/}
+  put 'pmn/Start/:id', :to => 'pmn#start', :constraints => {:ip => /127.0.0.1/}
+  post 'pmn/Stop/:id', :to => 'pmn#stop', :constraints => {:ip => /127.0.0.1/}
+  get 'pmn/GetStatus/:id', :to => 'pmn#status', :constraints => {:ip => /127.0.0.1/}
+  get 'pmn/GetResponse/:id', :to => 'pmn#get_response', :constraints => {:ip => /127.0.0.1/}
+  get 'pmn/GetResponseDocument/:id/:doc_id/:offset', :to => 'pmn#doc', :constraints => {:ip => /127.0.0.1/}
+  get 'pmn/Close/:id', :to => 'pmn#close', :constraints => {:ip => /127.0.0.1/}
+
+  get 'hdata/index', :constraints => {:ip => /127.0.0.1/}
+  get 'hdata/root', :constraints => {:ip => /127.0.0.1/}
 
   post 'records/create'
-  delete 'records/destroy'
-  
-  post 'library_functions', :to => "library_functions#create"
-  
+  #, :constraints => {:ip => /127.0.0.1/}
+  delete 'records/destroy', :constraints => {:ip => /127.0.0.1/}
+
+  post 'library_functions', :to => "library_functions#create", :constraints => {:ip => /127.0.0.1/}
+
   root :to => 'queries#index'
-  
+
   # The priority is based upon order of creation:
   # first created -> highest priority.
 

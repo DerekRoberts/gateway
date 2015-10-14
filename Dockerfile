@@ -1,139 +1,100 @@
-# Dockerfile for the PDC's Endpoint service
+# Dockerfile for the PDC's Gateway service, part of an Endpoint deployment
 #
+#
+# Modify default settings at runtime with environment files and/or variables.
+# - Set Gateway ID#: -e gID=####
+# - Set Hub IP addr: -e IP_HUB=#.#.#.#
+# - Use an env file: --env-file=/path/to/file.env
+#
+# Samples at https://github.com/physiciansdatacollaborative/endpoint.git
+
+
 # Base image
 #
 FROM phusion/passenger-ruby19
+MAINTAINER derek.roberts@gmail.com
 
 
-# Update system, install AuthSSH, Lynx and UnZip
+# Update system and packages
 #
 ENV DEBIAN_FRONTEND noninteractive
 RUN echo 'Dpkg::Options{ "--force-confdef"; "--force-confold" }' \
-      >> /etc/apt/apt.conf.d/local
-RUN apt-get update; \
-    apt-get upgrade -y; \
+      >> /etc/apt/apt.conf.d/local; \
+    apt-get update; \
     apt-get install -y \
       autossh \
-      mongodb \
-      rsync \
-      unzip
-
-
-# Create pdcadmin
-#
-RUN adduser --disabled-password --gecos "" pdcadmin
-RUN usermod -a -G sudo,adm pdcadmin
-
-
-# Start MongoDB
-#
-RUN mkdir -p /etc/service/mongodb/
-RUN ( \
-      echo "#!/bin/bash"; \
-      echo "#"; \
-      echo "# Exit on errors or unitialized variables"; \
-      echo "#"; \
-      echo "set -e -o nounset"; \
-      echo ""; \
-      echo ""; \
-      echo "# Start MongoDB"; \
-      echo "#"; \
-      echo "mkdir -p /var/lib/mongodb/"; \
-      echo "mkdir -p /data/db"; \
-      echo "mongod --smallfiles"; \
-    )  \
-    >> /etc/service/mongodb/run
-RUN chmod +x /etc/service/mongodb/run
-
-
-# Create startup script and make it executable
-#
-RUN mkdir -p /etc/service/app/
-RUN ( \
-      echo "#!/bin/bash"; \
-      echo "#"; \
-      echo "# Exit on errors or uninitialized variables"; \
-      echo "#"; \
-      echo "set -e -o nounset"; \
-      echo ""; \
-      echo ""; \
-      echo "# Wait until SSH keys are ready"; \
-      echo "#"; \
-      echo "while [ -f /app/wait ]"; \
-      echo "do"; \
-      echo "  echo 'Waiting for key exchange'"; \
-      echo "  sleep 5"; \
-      echo "done"; \
-      echo ""; \
-      echo "# Start tunnels"; \
-      echo "#"; \
-      echo "export AUTOSSH_PIDFILE=/app/tmp/pids/autossh_admin.pid"; \
-      echo "export REMOTE_PORT=\`expr 44000 + \${gID}\`"; \
-      echo ""; \
-      echo "/usr/bin/autossh -M0 -p2774 -N -R \${REMOTE_PORT}:localhost:22 autossh@\${IP_HUB} -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes &"; \
-      echo "sleep 5"; \
-      echo ""; \
-      echo "export AUTOSSH_PIDFILE=/app/tmp/pids/autossh_endpoint.pid"; \
-      echo "export REMOTE_PORT=\`expr 40000 + \${gID}\`"; \
-      echo ""; \
-      echo "/usr/bin/autossh -M0 -p2774 -N -R \${REMOTE_PORT}:localhost:3001 autossh@\${IP_HUB} -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes &"; \
-      echo "sleep 5"; \
-      echo ""; \
-      echo "# Start Endpoint"; \
-      echo "#"; \
-      echo "cd /app/"; \
-      echo "/sbin/setuser app bundle exec script/delayed_job start"; \
-      echo "exec /sbin/setuser app bundle exec rails server -p 3001"; \
-      echo "/sbin/setuser app bundle exec script/delayed_job stop"; \
-    )  \
-    >> /etc/service/app/run
-RUN chmod +x /etc/service/app/run
+      git; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 
 # Prepare /app/ folder
 #
 WORKDIR /app/
+#RUN git clone https://github.com/physiciansdatacollaborative/endpoint.git -b dev .; \
 COPY . .
-RUN mkdir -p ./tmp/pids ./util/files
-RUN gem install multipart-post
-RUN bundle install --path vendor/bundle
+RUN mkdir -p ./tmp/pids ./util/files; \
+    gem install multipart-post; \
+    sed -i -e "s/localhost:27017/database:27017/" config/mongoid.yml; \
+    chown -R app:app /app/; \
+    /sbin/setuser app bundle install --path vendor/bundle
 
 
-# Create key exchange script, uses a wait file (/app/wait)
+# Create AutoSSH User
 #
-RUN ( \
+RUN adduser --disabled-password --gecos '' --home /home/autossh autossh; \
+    chown -R autossh:autossh /home/autossh
+
+
+# Startup script for Gateway tunnel
+#
+RUN SRV=autossh; \
+    mkdir -p /etc/service/${SRV}/; \
+    ( \
       echo "#!/bin/bash"; \
+      echo ""; \
+      echo ""; \
+      echo "# Set variable defaults"; \
       echo "#"; \
-      echo "# Exit on errors or uninitialized variables"; \
+      echo "gID=\${gID:-0}"; \
+      echo "IP_HUB=\${IP_HUB:-10.0.2.2}"; \
+      echo "PORT_AUTOSSH=\${PORT_AUTOSSH:-22}"; \
+      echo "PORT_START_GATEWAY=\${PORT_START_GATEWAY:-40000}"; \
+      echo ""; \
+      echo ""; \
+      echo "# Start tunnels"; \
       echo "#"; \
-      echo "set -e -o nounset"; \
-      echo ""; \
-      echo ""; \
-      echo "# Create an SSH key, if necessary"; \
+      echo "export AUTOSSH_PIDFILE=/home/autossh/autossh_gateway.pid"; \
+      echo "PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${gID}\`"; \
       echo "#"; \
-      echo "if [ ! -s /home/pdcadmin/.ssh/id_rsa.pub ]"; \
-      echo "then"; \
-      echo "  /sbin/setuser pdcadmin ssh-keygen -t rsa -b 4096 -C \"$(whoami)@$(hostname)-$(date -I)\" -f /home/pdcadmin/.ssh/id_rsa -q -N \"\""; \
-      echo "fi"; \
-      echo ""; \
-      echo ""; \
-      echo "# Echo the public key"; \
-      echo "#"; \
-      echo "cat /home/pdcadmin/.ssh/id_rsa.pub"; \
-      echo ""; \
-      echo ""; \
-      echo "# Wait 5 seconds and remove the hold on Endpoint startup"; \
-      echo "#"; \
-      echo "if [ -e /app/wait ]"; \
-      echo "then"; \
-      echo "  rm /app/wait"; \
-      echo "  sleep 5"; \
-      echo "fi"; \
+      echo "sleep 30"; \
+      echo "chown -R autossh:autossh /home/autossh"; \
+      echo "exec /sbin/setuser autossh /usr/bin/autossh -M0 -p \${PORT_AUTOSSH} -N -R \\"; \
+      echo "  \${PORT_REMOTE}:localhost:3001 autossh@\${IP_HUB} -o ServerAliveInterval=15 \\"; \
+      echo "  -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes -v"; \
     )  \
-    >> /app/key_exchange.sh
-RUN chmod +x /app/key_exchange.sh
-RUN touch /app/wait
-RUN chown -R app:app /app/
+      >> /etc/service/${SRV}/run; \
+    chmod +x /etc/service/${SRV}/run
+
+
+# Startup script for Gateway app
+#
+RUN SRV=app; \
+    mkdir -p /etc/service/${SRV}/; \
+    ( \
+      echo "#!/bin/bash"; \
+      echo ""; \
+      echo ""; \
+      echo "# Start Endpoint"; \
+      echo "#"; \
+      echo "sleep 15"; \
+      echo "cd /app/"; \
+      echo "/sbin/setuser app bundle exec script/delayed_job stop"; \
+      echo "/sbin/setuser app bundle exec script/delayed_job start"; \
+      echo "exec /sbin/setuser app bundle exec rails server -p 3001"; \
+    )  \
+      >> /etc/service/${SRV}/run; \
+    chmod +x /etc/service/${SRV}/run
 
 
 # Run initialization command
