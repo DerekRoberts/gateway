@@ -19,7 +19,7 @@
 #
 FROM phusion/baseimage
 MAINTAINER derek.roberts@gmail.com
-ENV RELEASE 0.1.2
+ENV RELEASE 0.1.3
 
 
 # Create users and groups
