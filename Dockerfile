@@ -34,7 +34,7 @@
 #
 FROM phusion/passenger-ruby19
 MAINTAINER derek.roberts@gmail.com
-ENV RELEASE 0.1.4
+ENV RELEASE 0.1.5
 
 
 # Update system and packages
