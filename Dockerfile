@@ -1,33 +1,45 @@
-# Dockerfile for the PDC's Gateway service, part of an Endpoint deployment
+# Dockerfile for the PDC's Gateway (formerly Endpoint) service
 #
 #
-# Modify default settings at runtime with environment files and/or variables.
-# - Set Gateway ID#: -e gID=####
-# - Set Hub IP addr: -e IP_HUB=#.#.#.#
-# - Use an env file: --env-file=/path/to/file.env
+# Receives e2e exports and responds to queries as part of an Endpoint deployment.
+# Links to a database.
 #
-# E.g.:
+# Example:
+# sudo docker pull pdcbc/gateway
+# sudo docker run -d --name=gateway --restart=always \
+#   --link database:database \
+#   -v /encrypted/docker/import/.ssh/:/home/autossh/.ssh/:rw"
+#   -e gID=9999 \
+#   -e DOCTOR_IDS=11111,99999
+#   pdcbc/dclapi
 #
-# Samples at https://github.com/pdcbc/endpoint.git
-
-
-# Base image
+# Linked containers
+# - Database:     --link database:database
 #
-FROM phusion/passenger-ruby19:0.9.17
+# Folder paths
+# - SSH keys:     -v </path/>:/home/autossh/.ssh/:ro
+#
+# Required variables
+# - Gateway ID:   -e gID=####
+# - Doctor IDs:   -e DOCTOR_IDS=#####,#####,...,#####
+#
+# Modify default settings
+# - Composer IP:  -e IP_COMPOSER=#.#.#.#
+# - AutoSSH port: -e PORT_AUTOSSH=####
+# - Low GW port:  -e PORT_START_GATEWAY=####
+#
+# Releases
+# - https://github.com/PDCbc/gateway/releases
+#
+#
+FROM phusion/passenger-ruby19
 MAINTAINER derek.roberts@gmail.com
-
-
-# Set Gateway release tag (https://github.com/PDCbc/gateway/releases)
-#
-ENV RELEASE_GATEWAY 0.1.4
+ENV RELEASE 0.1.5
 
 
 # Update system and packages
 #
-ENV DEBIAN_FRONTEND noninteractive
-RUN echo 'Dpkg::Options{ "--force-confdef"; "--force-confold" }' \
-      >> /etc/apt/apt.conf.d/local; \
-    apt-get update; \
+RUN apt-get update; \
     apt-get install -y \
       autossh \
       git; \
@@ -38,7 +50,7 @@ RUN echo 'Dpkg::Options{ "--force-confdef"; "--force-confold" }' \
 # Prepare /app/ folder
 #
 WORKDIR /app/
-RUN git clone https://github.com/pdcbc/gateway.git -b ${RELEASE_GATEWAY} .; \
+RUN git clone https://github.com/pdcbc/gateway.git -b ${RELEASE} .; \
     mkdir -p ./tmp/pids ./util/files; \
     gem install multipart-post; \
     sed -i -e "s/localhost:27017/database:27017/" config/mongoid.yml; \
@@ -46,7 +58,7 @@ RUN git clone https://github.com/pdcbc/gateway.git -b ${RELEASE_GATEWAY} .; \
     /sbin/setuser app bundle install --path vendor/bundle
 
 
-# Create AutoSSH User
+# Add AutoSSH User
 #
 RUN adduser --disabled-password --gecos '' --home /home/autossh autossh; \
     chown -R autossh:autossh /home/autossh
@@ -60,43 +72,80 @@ RUN SRV=autossh; \
       echo "#!/bin/bash"; \
       echo ""; \
       echo ""; \
-      echo "# Set variable defaults"; \
+      echo "# Set variables"; \
       echo "#"; \
       echo "gID=\${gID:-0}"; \
-      echo "IP_HUB=\${IP_HUB:-10.0.2.2}"; \
-      echo "PORT_AUTOSSH=\${PORT_AUTOSSH:-22}"; \
+      echo "IP_COMPOSER=\${IP_COMPOSER:-142.104.128.120}"; \
+      echo "PORT_AUTOSSH=\${PORT_AUTOSSH:-2774}"; \
       echo "PORT_START_GATEWAY=\${PORT_START_GATEWAY:-40000}"; \
-      echo ""; \
-      echo ""; \
-      echo "# Start tunnels"; \
-      echo "#"; \
-      echo "export AUTOSSH_PIDFILE=/home/autossh/autossh_gateway.pid"; \
       echo "PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${gID}\`"; \
+      echo ""; \
+      echo ""; \
+      echo "# Check for SSH keys"; \
       echo "#"; \
-      echo "sleep 30"; \
+      echo "sleep 15"; \
       echo "chown -R autossh:autossh /home/autossh"; \
+      echo "if [ ! -s /home/autossh/.ssh/id_rsa.pub ]"; \
+      echo "then"; \
+      echo "  echo"; \
+      echo "  echo No SSH keys in /home/autossh/.ssh/."; \
+      echo "  echo"; \
+      echo "  sleep 3600"; \
+      echo "  exit"; \
+      echo "fi"; \
+      echo ""; \
+      echo ""; \
+      echo "# Start tunnels, echo key if unsuccessful"; \
+      echo "#"; \
+      echo "export AUTOSSH_MAXSTART=1"; \
       echo "exec /sbin/setuser autossh /usr/bin/autossh -M0 -p \${PORT_AUTOSSH} -N -R \\"; \
-      echo "  \${PORT_REMOTE}:localhost:3001 autossh@\${IP_HUB} -o ServerAliveInterval=15 \\"; \
-      echo "  -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes -v"; \
+      echo "  \${PORT_REMOTE}:localhost:3001 \${IP_COMPOSER} -o ServerAliveInterval=15 \\"; \
+      echo "  -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes"; \
     )  \
       >> /etc/service/${SRV}/run; \
     chmod +x /etc/service/${SRV}/run
 
 
-# Startup script for Gateway app
+# Startup script for Gateway's Delayed Job app
 #
-RUN SRV=app; \
+RUN SRV=delayed_job; \
     mkdir -p /etc/service/${SRV}/; \
     ( \
       echo "#!/bin/bash"; \
       echo ""; \
       echo ""; \
-      echo "# Start Endpoint"; \
+      echo "# Start delayed job"; \
       echo "#"; \
-      echo "sleep 15"; \
       echo "cd /app/"; \
-      echo "/sbin/setuser app bundle exec script/delayed_job stop"; \
-      echo "/sbin/setuser app bundle exec script/delayed_job start"; \
+      echo "/sbin/setuser app bundle exec /app/script/delayed_job stop > /dev/null"; \
+      echo "rm /app/tmp/pids/server.pid > /dev/null"; \
+      echo "exec /sbin/setuser app bundle exec /app/script/delayed_job run"; \
+    )  \
+      >> /etc/service/${SRV}/run; \
+    chmod +x /etc/service/${SRV}/run
+
+
+# Startup script for Rails server
+#
+RUN SRV=rails; \
+    mkdir -p /etc/service/${SRV}/; \
+    ( \
+      echo "#!/bin/bash"; \
+      echo ""; \
+      echo ""; \
+      echo "# Set variables"; \
+      echo "#"; \
+      echo "DOCTOR_IDS=\${DOCTOR_IDS:-cpsid}"; \
+      echo ""; \
+      echo ""; \
+      echo "# Populate providers.txt with DOCTOR_IDS"; \
+      echo "#"; \
+      echo "/app/providers.sh add \${DOCTOR_IDS}"; \
+      echo ""; \
+      echo ""; \
+      echo "# Start Rails server"; \
+      echo "#"; \
+      echo "cd /app/"; \
       echo "exec /sbin/setuser app bundle exec rails server -p 3001"; \
     )  \
       >> /etc/service/${SRV}/run; \
