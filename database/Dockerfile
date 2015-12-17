@@ -1,8 +1,7 @@
 # Dockerfile for the PDC's Gateway (formerly Endpoint) database
 #
 #
-# Based on Mongo official 3.0.  Expanded to use cron and maintenance scripts.
-# https://hub.docker.com/_/mongo/
+# Database for Gateway, de-identified.  Based on Mongo official 3.0.
 #
 # Example:
 # sudo docker pull pdcbc/gateway_db
@@ -16,10 +15,18 @@
 # Modify default settings
 # - RAM < 1 GB: -e RAM_REDUCE=<yes/no>
 #
+# Releases
+# - https://github.com/PDCbc/gateway/releases
+#
 #
 FROM phusion/baseimage
 MAINTAINER derek.roberts@gmail.com
 ENV RELEASE 0.1.5
+
+
+################################################################################
+# Start - modified from https://hub.docker.com/_/mongo/
+################################################################################
 
 
 # Create users and groups
@@ -67,6 +74,39 @@ VOLUME /data/db
 EXPOSE 27017
 
 
+################################################################################
+# End - modified from https://hub.docker.com/_/mongo/
+################################################################################
+
+
+# Mongo startup
+#
+RUN mkdir -p /etc/service/mongod/; \
+	SCRIPT=/etc/service/mongod/run; \
+  ( \
+    echo "#!/bin/bash"; \
+    echo ""; \
+    echo "set -e -o nounset"; \
+		echo ""; \
+		echo ""; \
+		echo "# Environment variables"; \
+		echo "#"; \
+		echo "RAM_REDUCE=\${RAM_REDUCE:-no}"; \
+		echo ""; \
+		echo ""; \
+		echo "# Start mongod"; \
+		echo "#"; \
+		echo "if( ${RAM_REDUCE} != yes )"; \
+		echo "then"; \
+		echo " exec mongod --storageEngine wiredTiger"; \
+		echo "else"; \
+		echo " exec mongod --storageEngine wiredTiger --wiredTigerEngineConfigString=cache_size=200M --nojournal"; \
+		echo "fi"; \
+  )  \
+    >> ${SCRIPT}; \
+	chmod +x ${SCRIPT}
+
+
 # Maintenance script and cron job
 #
 RUN SCRIPT=/db_maintenance.sh; \
@@ -102,31 +142,3 @@ RUN SCRIPT=/db_maintenance.sh; \
     echo "0 12 * * 0 "${SCRIPT}; \
   ) \
     | crontab -
-
-
-# Mongo startup
-#
-RUN mkdir -p /etc/service/mongod/; \
-	SCRIPT=/etc/service/mongod/run; \
-  ( \
-    echo "#!/bin/bash"; \
-    echo ""; \
-    echo "set -e -o nounset"; \
-		echo ""; \
-		echo ""; \
-		echo "# Environment variables"; \
-		echo "#"; \
-		echo "RAM_REDUCE=\${RAM_REDUCE:-no}"; \
-		echo ""; \
-		echo ""; \
-		echo "# Start mongod"; \
-		echo "#"; \
-		echo "if( ${RAM_REDUCE} != yes )"; \
-		echo "then"; \
-		echo " exec mongod --storageEngine wiredTiger"; \
-		echo "else"; \
-		echo " exec mongod --storageEngine wiredTiger --wiredTigerEngineConfigString=cache_size=200M --nojournal"; \
-		echo "fi"; \
-  )  \
-    >> ${SCRIPT}; \
-	chmod +x ${SCRIPT}
