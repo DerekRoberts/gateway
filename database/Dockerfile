@@ -15,13 +15,9 @@
 # Modify default settings
 # - RAM < 1 GB: -e RAM_REDUCE=<yes/no>
 #
-# Releases
-# - https://github.com/PDCbc/gateway/releases
-#
 #
 FROM phusion/baseimage
 MAINTAINER derek.roberts@gmail.com
-ENV RELEASE 0.1.5
 
 
 ################################################################################
@@ -37,6 +33,7 @@ RUN groupadd -r mongodb; \
 
 # Packages
 #
+ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update; \
 		apt-get install -y --no-install-recommends \
 			ca-certificates; \
@@ -85,23 +82,11 @@ RUN mkdir -p /etc/service/mongod/; \
 	SCRIPT=/etc/service/mongod/run; \
   ( \
     echo "#!/bin/bash"; \
-    echo ""; \
-    echo "set -e -o nounset"; \
-		echo ""; \
-		echo ""; \
-		echo "# Environment variables"; \
-		echo "#"; \
-		echo "RAM_REDUCE=\${RAM_REDUCE:-no}"; \
 		echo ""; \
 		echo ""; \
 		echo "# Start mongod"; \
 		echo "#"; \
-		echo "if( ${RAM_REDUCE} != yes )"; \
-		echo "then"; \
-		echo " exec mongod --storageEngine wiredTiger"; \
-		echo "else"; \
-		echo " exec mongod --storageEngine wiredTiger --wiredTigerEngineConfigString=cache_size=200M --nojournal"; \
-		echo "fi"; \
+		echo "exec mongod --storageEngine wiredTiger"; \
   )  \
     >> ${SCRIPT}; \
 	chmod +x ${SCRIPT}
