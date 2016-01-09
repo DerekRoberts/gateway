@@ -39,14 +39,20 @@ ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update; \
     apt-get install -y \
       autossh; \
+    apt-get autoclean; \
     apt-get clean; \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    rm -rf \
+      /var/lib/apt/lists/* \
+      /tmp/* \
+      /var/tmp/* \
+      /usr/share/doc/ \
+      /usr/share/doc-base/ \
+      /usr/share/man/
 
 
 # Prepare /app/ folder
 #
 WORKDIR /app/
-#RUN git clone https://github.com/physiciansdatacollaborative/endpoint.git -b dev .; \
 COPY . .
 RUN mkdir -p ./tmp/pids ./util/files; \
     sed -i -e "s/localhost:27017/database:27017/" config/mongoid.yml; \
@@ -72,7 +78,10 @@ RUN SRV=autossh; \
       echo "# Set variables"; \
       echo "#"; \
       echo "GATEWAY_ID=\${GATEWAY_ID:-0}"; \
+      echo "TEST_OPT_IN=\${TEST_OPT_IN:-no}"; \
+      echo "#"; \
       echo "IP_COMPOSER=\${IP_COMPOSER:-142.104.128.120}"; \
+      echo "IP_TESTCPSR=\${IP_TESTCPSR:-142.104.128.121}"; \
       echo "PORT_AUTOSSH=\${PORT_AUTOSSH:-2774}"; \
       echo "PORT_START_GATEWAY=\${PORT_START_GATEWAY:-40000}"; \
       echo "PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${GATEWAY_ID}\`"; \
@@ -80,7 +89,7 @@ RUN SRV=autossh; \
       echo ""; \
       echo "# Check for SSH keys"; \
       echo "#"; \
-      echo "sleep 15"; \
+      echo "sleep 5"; \
       echo "chown -R autossh:autossh /home/autossh"; \
       echo "if [ ! -s /home/autossh/.ssh/id_rsa.pub ]"; \
       echo "then"; \
@@ -92,18 +101,28 @@ RUN SRV=autossh; \
       echo "fi"; \
       echo ""; \
       echo ""; \
-      echo "# Start tunnels, echo key if unsuccessful"; \
+      echo "# Start tunnels"; \
       echo "#"; \
       echo "export AUTOSSH_MAXSTART=1"; \
-      echo "exec /sbin/setuser autossh /usr/bin/autossh -M0 -p \${PORT_AUTOSSH} -N -R \\"; \
-      echo "  \${PORT_REMOTE}:localhost:3001 \${IP_COMPOSER} -o ServerAliveInterval=15 \\"; \
-      echo "  -o ServerAliveCountMax=3 -o Protocol=2 -o ExitOnForwardFailure=yes"; \
+      echo "#"; \
+      echo "if [ \${TEST_OPT_IN} == yes ]"; \
+      echo "then"; \
+      echo "  export AUTOSSH_MAXSTART=2"; \
+      echo "  /sbin/setuser autossh /usr/bin/autossh \${IP_TESTCPSR} -p \${PORT_AUTOSSH} \\"; \
+      echo "    -N -R \${PORT_REMOTE}:localhost:3001 -o ServerAliveInterval=15 -o Protocol=2 \\"; \
+      echo "    -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -v &"; \
+      echo "  sleep 5"; \
+      echo "fi"; \
+      echo "#"; \
+      echo "exec /sbin/setuser autossh /usr/bin/autossh \${IP_COMPOSER} -p \${PORT_AUTOSSH} \\"; \
+      echo "  -N -R \${PORT_REMOTE}:localhost:3001 -o ServerAliveInterval=15 -o Protocol=2\\"; \
+      echo "  -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes"; \
     )  \
       >> /etc/service/${SRV}/run; \
     chmod +x /etc/service/${SRV}/run
 
 
-# Startup script for Gateway's Delayed Job app
+# Startup script for Gateway's delayed job
 #
 RUN SRV=delayed_job; \
     mkdir -p /etc/service/${SRV}/; \
@@ -147,6 +166,12 @@ RUN SRV=rails; \
     )  \
       >> /etc/service/${SRV}/run; \
     chmod +x /etc/service/${SRV}/run
+
+
+# Volume and port
+#
+VOLUME /home/autossh/.ssh/
+EXPOSE 3001
 
 
 # Run initialization command
