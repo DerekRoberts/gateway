@@ -42,8 +42,7 @@ RUN apt-key adv --keyserver ha.pool.sks-keyservers.net --recv-keys 42F3E95A2C4F0
       mongodb-org-server=$MONGO_VERSION \
       mongodb-org-shell=$MONGO_VERSION \
       mongodb-org-mongos=$MONGO_VERSION \
-      mongodb-org-tools=$MONGO_VERSION \
-      numactl; \
+      mongodb-org-tools=$MONGO_VERSION; \
     apt-get autoclean; \
     apt-get clean; \
     rm -rf \
@@ -102,7 +101,7 @@ RUN SERVICE=mongod;\
       echo "#"; \
       echo "mkdir -p /volumes/mongo/"; \
       echo "chown -R mongodb:mongodb /volumes/mongo/"; \
-      echo "exec /sbin/setuser mongodb numactl --interleave=all mongod --storageEngine wiredTiger --dbpath /volumes/mongo/"; \
+      echo "exec /sbin/setuser mongodb mongod --storageEngine wiredTiger --dbpath /volumes/mongo/"; \
     )  \
       >> ${SCRIPT}; \
     chmod +x ${SCRIPT}
