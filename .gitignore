@@ -13,4 +13,3 @@ Provider_Hash.txt
 known_hosts
 PROVIDER_ERRORS.log
 *.tar
-nagios-nrpe-support/tmp/
