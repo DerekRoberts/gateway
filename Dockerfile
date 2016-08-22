@@ -158,7 +158,7 @@ RUN SERVICE=delayed_job;\
       echo "#"; \
       echo "cd /gateway/"; \
       echo "/sbin/setuser app bundle exec /gateway/script/delayed_job stop > /dev/null"; \
-      echo "rm /gateway/tmp/pids/server.pid > /dev/null"; \
+      echo "[ ! -s \${VOLUME_SSH}/id_rsa.pub ]|| rm /gateway/tmp/pids/server.pid"; \
       echo "exec /sbin/setuser app bundle exec /gateway/script/delayed_job run"; \
     )  \
       >> ${SCRIPT}; \
