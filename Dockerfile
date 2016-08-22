@@ -116,17 +116,13 @@ RUN SERVICE=autossh_prod;\
       echo "#"; \
       echo "if [ \${TEST_OPT_IN} == yes ]"; \
       echo "then"; \
-      echo "  AUTOSSH_MAXSTART=2"; \
-      echo "  export AUTOSSH_MAXSTART=\${AUTOSSH_MAXSTART}"; \
       echo "  /sbin/setuser autossh /usr/bin/autossh \${IP_TESTCPSR} -p \${PORT_AUTOSSH} -i \${VOLUME_SSH}/id_rsa \\"; \
-      echo "    -N -R \${PORT_REMOTE}:localhost:3001 -o ServerAliveInterval=15 -o Protocol=2 \\"; \
+      echo "    -N -R \${PORT_REMOTE}:localhost:3001 -o ServerAliveInterval=60 -o Protocol=2 \\"; \
       echo "    -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no &"; \
       echo "fi"; \
       echo ""; \
       echo ""; \
       echo "# Start primary autossh tunnel, keep in foreground"; \
-      echo "#"; \
-      echo "export AUTOSSH_MAXSTART=\${AUTOSSH_MAXSTART}"; \
       echo "#"; \
       echo "/sbin/setuser autossh /usr/bin/autossh \${IP_COMPOSER} -p \${PORT_AUTOSSH} -i \${VOLUME_SSH}/id_rsa \\"; \
       echo "  -N -R \${PORT_REMOTE}:localhost:3001 -o ServerAliveInterval=15 -o Protocol=2\\"; \
@@ -158,7 +154,7 @@ RUN SERVICE=delayed_job;\
       echo "#"; \
       echo "cd /gateway/"; \
       echo "/sbin/setuser app bundle exec /gateway/script/delayed_job stop > /dev/null"; \
-      echo "[ ! -s \${VOLUME_SSH}/id_rsa.pub ]|| rm /gateway/tmp/pids/server.pid"; \
+      echo "[ ! -s /gateway/tmp/pids/server.pid ]|| rm /gateway/tmp/pids/server.pid"; \
       echo "exec /sbin/setuser app bundle exec /gateway/script/delayed_job run"; \
     )  \
       >> ${SCRIPT}; \
