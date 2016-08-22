@@ -1,26 +1,24 @@
-# Dockerfile for the PDC's Endpoint collection of services
+# Dockerfile for the HDC's Gateway Service
+#
+# Part of an Endpoint deployment
 #
 #
-# Converts SQL to deidentified to E2E, which is queried as aggregate data.
+# Receives E2E formatted XML, stores deidentified in a MongoDb container
+# and responds to queries for aggreate data.
+#
 # Requires pre-configured and pre-approved SSH keys.  Contact admin@pdcbc.ca.
 #
 # Example:
-# sudo docker pull pdcbc/endpoint
+# sudo docker pull hdcbc/gateway
 # sudo docker run -d --name=gateway --restart=always \
-#   -v /encrypted/volumes/:/volumes/
+#   -v /path/to/ssh/:/volumes/ssh/
 #   -e GATEWAY_ID=9999 \
 #   -e DOCTOR_IDS=11111,22222,...,99999
-#   pdcbc/endpoint
+#   hdcbc/gateway
 #
 #
 FROM phusion/passenger-ruby19
 MAINTAINER derek.roberts@gmail.com
-
-
-# Release numbers
-#
-ENV MONGO_MAJOR 3.2
-ENV MONGO_VERSION 3.2.0
 
 
 ################################################################################
@@ -32,24 +30,15 @@ ENV MONGO_VERSION 3.2.0
 #
 ENV TERM xterm
 ENV DEBIAN_FRONTEND noninteractive
-RUN apt-key adv --keyserver ha.pool.sks-keyservers.net --recv-keys 42F3E95A2C4F08279C4960ADD68FA50FEA312927; \
-    	echo "deb http://repo.mongodb.org/apt/ubuntu trusty/mongodb-org/$MONGO_MAJOR multiverse" > /etc/apt/sources.list.d/mongodb-org.list; \
-    apt-get update; \
+RUN apt-get update; \
     apt-get install --no-install-recommends -y \
       autossh \
-      ca-certificates \
-      mongodb-org=$MONGO_VERSION \
-      mongodb-org-server=$MONGO_VERSION \
-      mongodb-org-shell=$MONGO_VERSION \
-      mongodb-org-mongos=$MONGO_VERSION \
-      mongodb-org-tools=$MONGO_VERSION; \
+      ca-certificates; \
     apt-get autoclean; \
     apt-get clean; \
     rm -rf \
-      /etc/mongod.conf \
       /var/tmp/* \
       /var/lib/apt/lists/* \
-      /var/lib/mongodb \
       /tmp/* \
       /usr/share/doc/ \
       /usr/share/doc-base/ \
@@ -73,10 +62,11 @@ RUN USER=autossh; \
 ################################################################################
 
 
-# Prepare /gateway/ folder
+# Prepare /gateway/ folder, point mongoid.yml to container and run install
 #
 WORKDIR /gateway/
 COPY . .
+RUN sed -i 's/localhost/database/' config/mongoid.yml
 RUN mkdir -p ./tmp/pids ./util/files; \
     gem install multipart-post; \
     chown -R app:app /gateway/; \
@@ -86,25 +76,6 @@ RUN mkdir -p ./tmp/pids ./util/files; \
 ################################################################################
 # Runit service scripts
 ################################################################################
-
-
-# Startup - mongo
-#
-RUN SERVICE=mongod;\
-    mkdir -p /etc/service/${SERVICE}/; \
-    SCRIPT=/etc/service/${SERVICE}/run; \
-    ( \
-      echo "#!/bin/bash"; \
-      echo ""; \
-      echo ""; \
-      echo "# Start mongod"; \
-      echo "#"; \
-      echo "mkdir -p /volumes/mongo/"; \
-      echo "chown -R mongodb:mongodb /volumes/mongo/"; \
-      echo "exec /sbin/setuser mongodb mongod --storageEngine wiredTiger --dbpath /volumes/mongo/"; \
-    )  \
-      >> ${SCRIPT}; \
-    chmod +x ${SCRIPT}
 
 
 # Startup - autossh tunnel
@@ -251,7 +222,7 @@ RUN SERVICE=rails;\
 
 
 ################################################################################
-# Scripts and Crontab
+# Scripts
 ################################################################################
 
 
@@ -267,7 +238,7 @@ RUN SCRIPT=/ssh_test.sh; \
       echo "sleep 5"; \
       echo "echo"; \
       echo "echo"; \
-      echo "if [ \"\$( setuser autossh ssh -i /volumes/ssh/id_rsa -p 2774 142.104.128.120 /app/test/ssh_landing.sh )\" ]"; \
+      echo "if [ \"\$( setuser autossh ssh -i /volumes/ssh/id_rsa -p 2774 -o StrictHostKeyChecking=no 142.104.128.120 /app/test/ssh_landing.sh )\" ]"; \
       echo "then"; \
       echo "  echo 'Connection successful!'"; \
       echo "  echo"; \
@@ -285,47 +256,6 @@ RUN SCRIPT=/ssh_test.sh; \
     chmod +x ${SCRIPT}
 
 
-# Cron script - db maintenance
-#
-RUN SCRIPT=/db_maintenance.sh; \
-    ( \
-      echo "#!/bin/bash"; \
-      echo ""; \
-      echo ""; \
-      echo "# Wait for mongo to start"; \
-      echo "#"; \
-      echo "while [ \$( pgrep -c mongod ) -eq 0 ]"; \
-      echo "do"; \
-      echo "  sleep 60"; \
-      echo "done"; \
-      echo "sleep 5"; \
-      echo ""; \
-      echo ""; \
-      echo "# Set index"; \
-      echo "#"; \
-      echo "/usr/bin/mongo query_gateway_development --eval 'printjson( db.records.ensureIndex({ hash_id : 1 }, { unique : true }))'"; \
-      echo ""; \
-      echo ""; \
-      echo "# Database junk cleanup"; \
-      echo "#"; \
-      echo "/usr/bin/mongo query_gateway_development --eval 'db.providers.drop()' || true"; \
-      echo "/usr/bin/mongo query_gateway_development --eval 'db.queries.drop()'"; \
-      echo "/usr/bin/mongo query_gateway_development --eval 'db.results.drop()'"; \
-    )  \
-      >> ${SCRIPT}; \
-    chmod +x ${SCRIPT}
-
-
-# Crontab
-#
-RUN ( \
-      echo "# Run maintenance script (boot, Sundays at 12 PST = 20 UTC)"; \
-      echo "@reboot /db_maintenance.sh"; \
-      echo "0 20 * * 0 /db_maintenance.sh"; \
-    ) \
-      | crontab -
-
-
 ################################################################################
 # Volumes, ports and start command
 ################################################################################
@@ -333,13 +263,9 @@ RUN ( \
 
 # Volumes
 #
-RUN mkdir -p \
-      /volumes/import/ \
-      /volumes/mongo/ \
-      /volumes/ssh/; \
-    chown -R mongodb:mongodb /volumes/mongo/; \
+RUN mkdir -p /volumes/ssh/; \
     chown -R autossh:autossh /volumes/ssh/
-VOLUME /volumes/
+VOLUME /volumes/ssh/
 
 
 # Initialize
