@@ -74,7 +74,7 @@ RUN mkdir -p ./tmp/pids ./util/files; \
 
 
 ################################################################################
-# Runit service scripts
+# Runit Service Scripts
 ################################################################################
 
 
@@ -93,10 +93,12 @@ RUN SERVICE=autossh_prod;\
       echo "TEST_OPT_IN=\${TEST_OPT_IN:-no}"; \
       echo "#"; \
       echo "IP_COMPOSER=\${IP_COMPOSER:-142.104.128.120}"; \
+      echo "IP_TESTCPSR=\${IP_TESTCPSR:-142.104.128.121}"; \
       echo "PORT_AUTOSSH=\${PORT_AUTOSSH:-2774}"; \
       echo "PORT_START_GATEWAY=\${PORT_START_GATEWAY:-40000}"; \
       echo "PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${GATEWAY_ID}\`"; \
       echo "#"; \
+      echo "AUTOSSH_MAXSTART=1"; \
       echo "VOLUME_SSH=/volumes/ssh"; \
       echo ""; \
       echo ""; \
@@ -110,9 +112,21 @@ RUN SERVICE=autossh_prod;\
       echo "fi"; \
       echo ""; \
       echo ""; \
-      echo "# Start tunnels"; \
+      echo "# Start test autossh tunnel (requires opt-in), leave in background"; \
       echo "#"; \
-      echo "export AUTOSSH_MAXSTART=1"; \
+      echo "if [ \${TEST_OPT_IN} == yes ]"; \
+      echo "then"; \
+      echo "  AUTOSSH_MAXSTART=2"; \
+      echo "  export AUTOSSH_MAXSTART=\${AUTOSSH_MAXSTART}"; \
+      echo "  /sbin/setuser autossh /usr/bin/autossh \${IP_TESTCPSR} -p \${PORT_AUTOSSH} -i \${VOLUME_SSH}/id_rsa \\"; \
+      echo "    -N -R \${PORT_REMOTE}:localhost:3001 -o ServerAliveInterval=15 -o Protocol=2 \\"; \
+      echo "    -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no &"; \
+      echo "fi"; \
+      echo ""; \
+      echo ""; \
+      echo "# Start primary autossh tunnel, keep in foreground"; \
+      echo "#"; \
+      echo "export AUTOSSH_MAXSTART=\${AUTOSSH_MAXSTART}"; \
       echo "#"; \
       echo "/sbin/setuser autossh /usr/bin/autossh \${IP_COMPOSER} -p \${PORT_AUTOSSH} -i \${VOLUME_SSH}/id_rsa \\"; \
       echo "  -N -R \${PORT_REMOTE}:localhost:3001 -o ServerAliveInterval=15 -o Protocol=2\\"; \
@@ -129,48 +143,6 @@ RUN SERVICE=autossh_prod;\
       )  \
         >> ${SCRIPT}; \
     	chmod +x ${SCRIPT}
-
-
-# Startup - autossh testing tunnel (optional)
-#
-RUN SERVICE=autossh_test;\
-    mkdir -p /etc/service/${SERVICE}/; \
-    SCRIPT=/etc/service/${SERVICE}/run; \
-    ( \
-      echo "#!/bin/bash"; \
-      echo ""; \
-      echo ""; \
-      echo "# Set variables"; \
-      echo "#"; \
-      echo "GATEWAY_ID=\${GATEWAY_ID:-0}"; \
-      echo "TEST_OPT_IN=\${TEST_OPT_IN:-no}"; \
-      echo "#"; \
-      echo "IP_TESTCPSR=\${IP_TESTCPSR:-142.104.128.121}"; \
-      echo "PORT_AUTOSSH=\${PORT_AUTOSSH:-2774}"; \
-      echo "PORT_START_GATEWAY=\${PORT_START_GATEWAY:-40000}"; \
-      echo "PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${GATEWAY_ID}\`"; \
-      echo "#"; \
-      echo "VOLUME_SSH=/volumes/ssh"; \
-      echo ""; \
-      echo ""; \
-      echo "# Start tunnels"; \
-      echo "#"; \
-      echo "sleep 15"; \
-      echo "export AUTOSSH_MAXSTART=1"; \
-      echo "#"; \
-      echo "if [ \${TEST_OPT_IN} == yes ]"; \
-      echo "then"; \
-      echo "  export AUTOSSH_MAXSTART=2"; \
-      echo "  /sbin/setuser autossh /usr/bin/autossh \${IP_TESTCPSR} -p \${PORT_AUTOSSH} -i \${VOLUME_SSH}/id_rsa \\"; \
-      echo "    -N -R \${PORT_REMOTE}:localhost:3001 -o ServerAliveInterval=15 -o Protocol=2 \\"; \
-      echo "    -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no"; \
-      echo "else"; \
-      echo "  rm -rf /etc/service/"${SERVICE}; \
-      echo "fi"; \
-      echo "sleep 60"; \
-    )  \
-      >> ${SCRIPT}; \
-    chmod +x ${SCRIPT}
 
 
 # Startup - gateway delayed job
@@ -222,7 +194,7 @@ RUN SERVICE=rails;\
 
 
 ################################################################################
-# Scripts
+# Test Scripts
 ################################################################################
 
 
