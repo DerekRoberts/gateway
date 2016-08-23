@@ -32,7 +32,8 @@ ENV TERM xterm
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update; \
     apt-get install --no-install-recommends -y \
-      autossh; \
+      autossh\
+      mongodb-clients; \
     apt-get autoclean; \
     apt-get clean; \
     rm -rf \
@@ -181,7 +182,7 @@ RUN SERVICE=rails;\
 
 
 ################################################################################
-# Test Scripts
+# Test and Maintenance Scripts
 ################################################################################
 
 
@@ -213,6 +214,38 @@ RUN SCRIPT=/ssh_test.sh; \
     )  \
       >> ${SCRIPT}; \
     chmod +x ${SCRIPT}
+
+
+# MongoDb maintenance
+#
+RUN SCRIPT=/db_maintenance.sh; \
+( \
+echo "#!/bin/bash"; \
+echo ""; \
+echo ""; \
+echo "# Wait for mongo to start"; \
+echo "#"; \
+echo "sleep 30"; \
+echo ""; \
+echo ""; \
+echo "# Set index"; \
+echo "#"; \
+echo "/usr/bin/mongo database:27017/query_gateway_development --eval 'db.records.createIndex({ hash_id : 1 }, { unique : true })'"; \
+echo ""; \
+echo ""; \
+echo "# Database junk cleanup"; \
+echo "#"; \
+echo "/usr/bin/mongo database:27017/query_gateway_development --eval 'db.providers.drop()'"; \
+echo "/usr/bin/mongo database:27017/query_gateway_development --eval 'db.queries.drop()'"; \
+echo "/usr/bin/mongo database:27017/query_gateway_development --eval 'db.results.drop()'"; \
+)  \
+>> ${SCRIPT}; \
+chmod +x ${SCRIPT}; \
+  ( \
+    echo "# Run maintenance script (Sundays at noon)"; \
+    echo "0 12 * * 0 "${SCRIPT}; \
+  ) \
+    | crontab -
 
 
 ################################################################################
