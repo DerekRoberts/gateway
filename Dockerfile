@@ -118,7 +118,7 @@ RUN SERVICE=autossh_prod;\
       echo "then"; \
       echo "  /sbin/setuser autossh /usr/bin/autossh \${IP_TESTCPSR} -p \${PORT_AUTOSSH} -i \${VOLUME_SSH}/id_rsa \\"; \
       echo "    -N -R \${PORT_REMOTE}:localhost:3001 -o ServerAliveInterval=60 -o Protocol=2 \\"; \
-      echo "    -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no &"; \
+      echo "    -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -f"; \
       echo "fi"; \
       echo ""; \
       echo ""; \
