@@ -115,7 +115,7 @@ RUN SERVICE=autossh_prod;\
       echo "#"; \
       echo "if [ \${TEST_OPT_IN} == yes ]"; \
       echo "then"; \
-      echo "  /sbin/setuser autossh /usr/bin/autossh \${IP_TESTCPSR} -p \${PORT_AUTOSSH} -i \${VOLUME_SSH}/id_rsa \\"; \
+      echo "  /sbin/setuser autossh /usr/bin/autossh \${IP_TESTCPSR} -p \${PORT_AUTOSSH} \\"; \
       echo "    -N -R \${PORT_REMOTE}:localhost:3001 -o ServerAliveInterval=60 -o Protocol=2 \\"; \
       echo "    -o StrictHostKeyChecking=no -f"; \
       echo "fi"; \
@@ -123,7 +123,7 @@ RUN SERVICE=autossh_prod;\
       echo ""; \
       echo "# Start primary autossh tunnel, keep in foreground"; \
       echo "#"; \
-      echo "/sbin/setuser autossh /usr/bin/autossh \${IP_COMPOSER} -p \${PORT_AUTOSSH} -i \${VOLUME_SSH}/id_rsa \\"; \
+      echo "/sbin/setuser autossh /usr/bin/autossh \${IP_COMPOSER} -p \${PORT_AUTOSSH} \\"; \
       echo "  -N -R \${PORT_REMOTE}:localhost:3001 -o ServerAliveInterval=30 -o Protocol=2\\"; \
       echo "  -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no"; \
       echo ""; \
@@ -205,7 +205,7 @@ RUN SCRIPT=/ssh_test.sh; \
       echo "sleep 5"; \
       echo "echo"; \
       echo "echo"; \
-      echo "if [ \"\$( setuser autossh ssh -i /volumes/ssh/id_rsa -p 2774 -o StrictHostKeyChecking=no 142.104.128.120 /app/test/ssh_landing.sh )\" ]"; \
+      echo "if [ \"\$( setuser autossh ssh -p 2774 -o StrictHostKeyChecking=no 142.104.128.120 /app/test/ssh_landing.sh )\" ]"; \
       echo "then"; \
       echo "  echo 'Connection successful!'"; \
       echo "  echo"; \
@@ -230,8 +230,7 @@ RUN SCRIPT=/ssh_test.sh; \
 
 # Volumes
 #
-RUN mkdir -p /volumes/ssh/; \
-    chown -R autossh:autossh /volumes/ssh/
+RUN chown -R autossh:autossh /home/autossh/.ssh/
 VOLUME /volumes/ssh/
 
 
