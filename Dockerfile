@@ -98,7 +98,6 @@ RUN SERVICE=autossh_prod;\
       echo "PORT_START_GATEWAY=\${PORT_START_GATEWAY:-40000}"; \
       echo "PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${GATEWAY_ID}\`"; \
       echo "#"; \
-      echo "AUTOSSH_MAXSTART=1"; \
       echo "VOLUME_SSH=/volumes/ssh"; \
       echo ""; \
       echo ""; \
@@ -118,15 +117,15 @@ RUN SERVICE=autossh_prod;\
       echo "then"; \
       echo "  /sbin/setuser autossh /usr/bin/autossh \${IP_TESTCPSR} -p \${PORT_AUTOSSH} -i \${VOLUME_SSH}/id_rsa \\"; \
       echo "    -N -R \${PORT_REMOTE}:localhost:3001 -o ServerAliveInterval=60 -o Protocol=2 \\"; \
-      echo "    -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -f"; \
+      echo "    -o StrictHostKeyChecking=no -f"; \
       echo "fi"; \
       echo ""; \
       echo ""; \
       echo "# Start primary autossh tunnel, keep in foreground"; \
       echo "#"; \
       echo "/sbin/setuser autossh /usr/bin/autossh \${IP_COMPOSER} -p \${PORT_AUTOSSH} -i \${VOLUME_SSH}/id_rsa \\"; \
-      echo "  -N -R \${PORT_REMOTE}:localhost:3001 -o ServerAliveInterval=15 -o Protocol=2\\"; \
-      echo "  -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no"; \
+      echo "  -N -R \${PORT_REMOTE}:localhost:3001 -o ServerAliveInterval=30 -o Protocol=2\\"; \
+      echo "  -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no"; \
       echo ""; \
       echo ""; \
       echo "# If connection has failed, provide direction"; \
