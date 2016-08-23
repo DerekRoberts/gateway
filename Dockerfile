@@ -3,18 +3,23 @@
 # Part of an Endpoint deployment
 #
 #
-# Receives E2E formatted XML, stores deidentified in a MongoDb container
-# and responds to queries for aggreate data.
+# Receives E2E formatted XML, stores deidentified in a pre-existing MongoDb
+# container and responds to aggreate data queries.
 #
 # Requires pre-configured and pre-approved SSH keys.  Contact admin@pdcbc.ca.
 #
 # Example:
-# sudo docker pull hdcbc/gateway
-# sudo docker run -d --name=gateway --restart=always \
-#   -v /path/to/ssh/:/home/autossh/.ssh/
+# sudo docker pull mongo:3.2.9
+# sudo docker pull hdcbc/gateway:latest
+# sudo docker run -d --restart=always --name=gateway_db \
+#   -v <local path>:/data/db/ \
+#   mongo:3.2.9
+# sudo docker run -d --restart=always --name=gateway \
+#   -v <local path>:/home/autossh/.ssh/ \
 #   -e GATEWAY_ID=9999 \
-#   -e DOCTOR_IDS=11111,22222,...,99999
-#   hdcbc/gateway
+#   -e DOCTOR_IDS=11111,22222,...,99999 \
+#   --link gateway_db:database \
+#   hdcbc/gateway:latest
 #
 #
 FROM phusion/passenger-ruby19
@@ -22,14 +27,15 @@ MAINTAINER derek.roberts@gmail.com
 
 
 ################################################################################
-# System and packages
+# System
 ################################################################################
 
 
-# Update system and packages
+# Environment variables, users and packages
 #
 ENV TERM xterm
 ENV DEBIAN_FRONTEND noninteractive
+RUN adduser --disabled-password --gecos '' autossh
 RUN apt-get update; \
     apt-get install --no-install-recommends -y \
       autossh\
@@ -46,17 +52,7 @@ RUN apt-get update; \
 
 
 ################################################################################
-# Users and groups
-################################################################################
-
-
-# AutoSSH user
-#
-RUN adduser --disabled-password --gecos '' autossh
-
-
-################################################################################
-# Setup
+# Application
 ################################################################################
 
 
@@ -221,11 +217,6 @@ RUN SCRIPT=/ssh_test.sh; \
 RUN SCRIPT=/db_maintenance.sh; \
 ( \
 echo "#!/bin/bash"; \
-echo ""; \
-echo ""; \
-echo "# Wait for mongo to start"; \
-echo "#"; \
-echo "sleep 30"; \
 echo ""; \
 echo ""; \
 echo "# Set index"; \
