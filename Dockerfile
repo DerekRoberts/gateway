@@ -11,7 +11,7 @@
 # Example:
 # sudo docker pull hdcbc/gateway
 # sudo docker run -d --name=gateway --restart=always \
-#   -v /path/to/ssh/:/volumes/ssh/
+#   -v /path/to/ssh/:/home/autossh/.ssh/
 #   -e GATEWAY_ID=9999 \
 #   -e DOCTOR_IDS=11111,22222,...,99999
 #   hdcbc/gateway
@@ -32,8 +32,7 @@ ENV TERM xterm
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update; \
     apt-get install --no-install-recommends -y \
-      autossh \
-      ca-certificates; \
+      autossh; \
     apt-get autoclean; \
     apt-get clean; \
     rm -rf \
@@ -52,9 +51,7 @@ RUN apt-get update; \
 
 # AutoSSH user
 #
-RUN USER=autossh; \
-    adduser --disabled-password --gecos '' --home /home/${USER} ${USER}; \
-    chown -R ${USER}:${USER} /home/${USER}
+RUN adduser --disabled-password --gecos '' autossh
 
 
 ################################################################################
@@ -80,7 +77,7 @@ RUN mkdir -p ./tmp/pids ./util/files; \
 
 # Startup - autossh tunnel
 #
-RUN SERVICE=autossh_prod;\
+RUN SERVICE=autossh;\
     mkdir -p /etc/service/${SERVICE}/; \
     SCRIPT=/etc/service/${SERVICE}/run; \
     ( \
@@ -93,21 +90,18 @@ RUN SERVICE=autossh_prod;\
       echo "TEST_OPT_IN=\${TEST_OPT_IN:-no}"; \
       echo "#"; \
       echo "IP_COMPOSER=\${IP_COMPOSER:-142.104.128.120}"; \
-      echo "IP_TESTCPSR=\${IP_TESTCPSR:-142.104.128.121}"; \
+      echo "IP_TEST_GRP=\${IP_TEST_GRP:-142.104.128.121}"; \
       echo "PORT_AUTOSSH=\${PORT_AUTOSSH:-2774}"; \
       echo "PORT_START_GATEWAY=\${PORT_START_GATEWAY:-40000}"; \
       echo "PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${GATEWAY_ID}\`"; \
-      echo "#"; \
-      echo "VOLUME_SSH=/volumes/ssh"; \
       echo ""; \
       echo ""; \
-      echo "# Check for SSH keys"; \
+      echo "# Check for SSH keys, create if necessary"; \
       echo "#"; \
-      echo "mkdir -p \${VOLUME_SSH}/"; \
-      echo "chown -R autossh:autossh \${VOLUME_SSH}"; \
-      echo "if [ ! -s \${VOLUME_SSH}/id_rsa.pub ]"; \
+      echo "if [ ! -s /home/autossh/.ssh/id_rsa.pub ]"; \
       echo "then"; \
-      echo "  ssh-keygen -b 4096 -t rsa -N \"\" -C ep\${GATEWAY_ID}-\$(date +%Y-%m-%d-%T) -f \${VOLUME_SSH}/id_rsa"; \
+      echo "  chown -R autossh:autossh /home/autossh/"; \
+      echo "  /sbin/setuser autossh ssh-keygen -b 4096 -t rsa -N \"\" -C ep\${GATEWAY_ID}-\$(date +%Y-%m-%d-%T) -f /home/autossh/.ssh/id_rsa"; \
       echo "fi"; \
       echo ""; \
       echo ""; \
@@ -115,24 +109,22 @@ RUN SERVICE=autossh_prod;\
       echo "#"; \
       echo "if [ \${TEST_OPT_IN} == yes ]"; \
       echo "then"; \
-      echo "  /sbin/setuser autossh /usr/bin/autossh \${IP_TESTCPSR} -p \${PORT_AUTOSSH} \\"; \
-      echo "    -N -R \${PORT_REMOTE}:localhost:3001 -o ServerAliveInterval=60 -o Protocol=2 \\"; \
-      echo "    -o StrictHostKeyChecking=no -f"; \
+      echo "  /sbin/setuser autossh /usr/bin/autossh \${IP_TEST_GRP} -p \${PORT_AUTOSSH} -N -R \${PORT_REMOTE}:localhost:3001 \\"; \
+      echo "    -o ServerAliveInterval=60 -o Protocol=2 -o StrictHostKeyChecking=no -f"; \
       echo "fi"; \
       echo ""; \
       echo ""; \
       echo "# Start primary autossh tunnel, keep in foreground"; \
       echo "#"; \
-      echo "/sbin/setuser autossh /usr/bin/autossh \${IP_COMPOSER} -p \${PORT_AUTOSSH} \\"; \
-      echo "  -N -R \${PORT_REMOTE}:localhost:3001 -o ServerAliveInterval=30 -o Protocol=2\\"; \
-      echo "  -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no"; \
+      echo "/sbin/setuser autossh /usr/bin/autossh \${IP_COMPOSER} -p \${PORT_AUTOSSH} -N -R \${PORT_REMOTE}:localhost:3001 \\"; \
+      echo "  -o ServerAliveInterval=30 -o Protocol=2 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no"; \
       echo ""; \
       echo ""; \
       echo "# If connection has failed, provide direction"; \
       echo "#"; \
-      echo "cat \${VOLUME_SSH}/id_rsa.pub"; \
+      echo "cat /home/autossh/.ssh/id_rsa.pub"; \
       echo "echo"; \
-      echo "echo 'AutoSSH not connected.  Please provide \${VOLUME_SSH}/id_rsa.pub (above),'"; \
+      echo "echo 'AutoSSH not connected.  Please provide /home/autossh/.ssh/id_rsa.pub (above),'"; \
       echo "echo 'a list of participating CPSIDs and all paperwork to the PDC at admin@pdcbc.ca'"; \
       echo "sleep 60"; \
       )  \
@@ -211,7 +203,7 @@ RUN SCRIPT=/ssh_test.sh; \
       echo "  echo"; \
       echo "  echo ':D'"; \
       echo "else"; \
-      echo "  cat /volumes/ssh/id_rsa.pub"; \
+      echo "  cat /home/autossh/.ssh/id_rsa.pub"; \
       echo "  echo 'ERROR: unable to connect to 142.104.128.120'"; \
       echo "  echo"; \
       echo "  echo 'Please verify the ssh public key (above) has been provided to admin@pdcbc.ca.'"; \
@@ -230,8 +222,8 @@ RUN SCRIPT=/ssh_test.sh; \
 
 # Volumes
 #
-RUN chown -R autossh:autossh /home/autossh/.ssh/
-VOLUME /volumes/ssh/
+VOLUME /home/autossh/.ssh/
+RUN chown -R autossh:autossh /home/autossh/
 
 
 # Initialize
