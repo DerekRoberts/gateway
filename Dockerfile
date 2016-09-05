@@ -206,7 +206,7 @@ RUN SCRIPT=/ssh_test.sh; \
       echo "sleep 5"; \
       echo "echo"; \
       echo "echo"; \
-      echo "if [ \"\$( setuser autossh ssh -p 2774 -o StrictHostKeyChecking=no 142.104.128.120 /app/test/ssh_landing.sh )\" ]"; \
+      echo "if [ \"\$( setuser autossh ssh -p 2774 -o BatchMode=yes -o StrictHostKeyChecking=no 142.104.128.120 /app/test/ssh_landing.sh )\" ]"; \
       echo "then"; \
       echo "  echo 'Connection successful!'"; \
       echo "  echo"; \
