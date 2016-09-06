@@ -13,4 +13,4 @@ cd ${DIR}
 
 # Import sample 10 data
 #
-mongoimport --db query_gateway_development --collection records sample.json | grep imported
+mongoimport --host database --db query_gateway_development --collection records sample.json | grep imported
