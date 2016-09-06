@@ -111,6 +111,16 @@ RUN SERVICE=autossh;\
       echo "fi"; \
       echo ""; \
       echo ""; \
+      echo "# Export PID variable and stop any autossh instances"; \
+      echo "#"; \
+      echo "export AUTOSSH_PIDFILE=/home/autossh/autossh.pid"; \
+      echo "if [ -s \${AUTOSSH_PIDFILE} ]"; \
+      echo "then"; \
+      echo "  kill cat \${AUTOSSH_PIDFILE} || true"; \
+      echo "  rm \${AUTOSSH_PIDFILE}"; \
+      echo "fi"; \
+      echo ""; \
+      echo ""; \
       echo "# Start primary autossh tunnel, keep in foreground"; \
       echo "#"; \
       echo "/sbin/setuser autossh /usr/bin/autossh \${IP_COMPOSER} -p \${PORT_AUTOSSH} -N -R \${PORT_REMOTE}:localhost:3001 \\"; \
@@ -143,6 +153,7 @@ RUN SERVICE=delayed_job;\
       echo "cd /gateway/"; \
       echo "/sbin/setuser app bundle exec /gateway/script/delayed_job stop > /dev/null"; \
       echo "[ ! -s /gateway/tmp/pids/server.pid ]|| rm /gateway/tmp/pids/server.pid"; \
+      echo "echo 'Starting delayed_job'"; \
       echo "exec /sbin/setuser app bundle exec /gateway/script/delayed_job run"; \
     )  \
       >> ${SCRIPT}; \
@@ -171,6 +182,7 @@ RUN SERVICE=rails;\
       echo "# Start Rails server"; \
       echo "#"; \
       echo "cd /gateway/"; \
+      echo "echo 'Starting rails'"; \
       echo "exec /sbin/setuser app bundle exec rails server -p 3001"; \
     )  \
       >> ${SCRIPT}; \
@@ -194,7 +206,7 @@ RUN SCRIPT=/ssh_test.sh; \
       echo "sleep 5"; \
       echo "echo"; \
       echo "echo"; \
-      echo "if [ \"\$( setuser autossh ssh -p 2774 -o StrictHostKeyChecking=no 142.104.128.120 /app/test/ssh_landing.sh )\" ]"; \
+      echo "if [ \"\$( setuser autossh ssh -p 2774 -o BatchMode=yes -o StrictHostKeyChecking=no 142.104.128.120 /app/test/ssh_landing.sh )\" ]"; \
       echo "then"; \
       echo "  echo 'Connection successful!'"; \
       echo "  echo"; \
