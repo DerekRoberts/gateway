@@ -6,6 +6,14 @@ The query gateway is a web based application that provides the back end for exec
 The query gateway which exposes a query API, accepts queries, runs those queries against the patient data,
 and returns the results of the query back to the query composer.
 
+Docker Image
+------------
+Please see our Endpoint repository for deployment information.  [GitHub.com/HDCbc/Endpoint](https://github.com/HDCbc/endpoint)
+
+[![](https://images.microbadger.com/badges/version/hdcbc/gateway.svg)](https://microbadger.com/images/hdcbc/gateway)
+
+[![](https://images.microbadger.com/badges/image/hdcbc/gateway.svg)](https://microbadger.com/images/hdcbc/gateway)
+
 Environments
 ------------
 hQuery will run properly on OSX and various distributions of Linux
