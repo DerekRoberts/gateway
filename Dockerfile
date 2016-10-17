@@ -267,6 +267,7 @@ RUN SCRIPT=/db_maintenance.sh; \
 
 # Volumes
 #
+EXPOSE 3001
 VOLUME /home/autossh/.ssh/
 RUN chown -R autossh:autossh /home/autossh/
 
