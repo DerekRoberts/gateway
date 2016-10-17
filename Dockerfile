@@ -125,7 +125,7 @@ RUN SERVICE=autossh;\
       echo "export AUTOSSH_PIDFILE=/home/autossh/autossh.pid"; \
       echo "if [ -s \${AUTOSSH_PIDFILE} ]"; \
       echo "then"; \
-      echo "  kill cat \${AUTOSSH_PIDFILE} || true"; \
+      echo "  kill \$( cat \${AUTOSSH_PIDFILE}) || true"; \
       echo "  rm \${AUTOSSH_PIDFILE}"; \
       echo "fi"; \
       echo ""; \
