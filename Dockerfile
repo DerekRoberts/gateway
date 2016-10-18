@@ -61,33 +61,81 @@ RUN apt-get update; \
 
 
 ################################################################################
-# Application
-################################################################################
-
-
-# Prepare /gateway/ folder, point mongoid.yml to container and run install
-#
-WORKDIR /gateway/
-COPY . .
-RUN sed -i 's/localhost/database/' config/mongoid.yml
-RUN mkdir -p ./tmp/pids ./util/files; \
-    gem install multipart-post; \
-    chown -R app:app /gateway/; \
-    /sbin/setuser app bundle install --path vendor/bundle
-
-
-################################################################################
 # Runit Service Scripts
 ################################################################################
 
 
-# Startup - autossh tunnel
+# Rails
+#
+RUN SERVICE=rails;\
+    mkdir -p /etc/service/${SERVICE}/; \
+    SCRIPT=/etc/service/${SERVICE}/run; \
+    ( \
+      echo '#!/bin/bash'; \
+      echo '#'; \
+      echo 'set -eu'; \
+      echo ''; \
+      echo ''; \
+      echo '# Set variables and populate providers.txt'; \
+      echo '#'; \
+      echo 'DOCTOR_IDS=${DOCTOR_IDS:-cpsid}'; \
+      echo '/gateway/providers.sh add ${DOCTOR_IDS}'; \
+      echo ''; \
+      echo ''; \
+      echo '# Stop any old instances'; \
+      echo '#'; \
+      echo 'PIDFILE=/gateway/tmp/pids/server.pid'; \
+      echo '[ ! -s ${PIDFILE} ]|| \'; \
+      echo '  kill $( cat ${PIDFILE} )|| true'; \
+      echo ''; \
+      echo ''; \
+      echo '# Start Rails server, removing pidfile on exit or failure'; \
+      echo '#'; \
+      echo 'cd /gateway/'; \
+      echo 'echo 'Starting rails''; \
+      echo '/sbin/setuser app bundle exec rails server -p 3001 || \'; \
+      echo '  rm ${PIDFILE}'; \
+    )  \
+      >> ${SCRIPT}; \
+    chmod +x ${SCRIPT}
+
+
+# delayed job
+#
+RUN SERVICE=delayed_job;\
+    mkdir -p /etc/service/${SERVICE}/; \
+    SCRIPT=/etc/service/${SERVICE}/run; \
+    ( \
+      echo '#!/bin/bash'; \
+      echo ''; \
+      echo ''; \
+      echo '# Stop any old instances'; \
+      echo '#'; \
+      echo 'PIDFILE=/gateway/tmp/pids/delayed_job.pid'; \
+      echo '[ ! -s ${PIDFILE} ]|| \'; \
+      echo '  kill $( cat ${PIDFILE} )|| true'; \
+      echo ''; \
+      echo ''; \
+      echo '# Start delayed job, removing pidfile on exit or failure'; \
+      echo '#'; \
+      echo 'cd /gateway/'; \
+      echo 'echo 'Starting delayed_job''; \
+      echo '/sbin/setuser app bundle exec /gateway/script/delayed_job run || \'; \
+      echo '  rm ${PIDFILE}'; \
+    )  \
+      >> ${SCRIPT}; \
+    chmod +x ${SCRIPT}
+
+
+# autossh tunnel and config
 #
 RUN SERVICE=autossh;\
     mkdir -p /etc/service/${SERVICE}/; \
     SCRIPT=/etc/service/${SERVICE}/run; \
     ( \
       echo "#!/bin/bash"; \
+      echo "#"; \
+      echo "set -eu"; \
       echo ""; \
       echo ""; \
       echo "# Set variables"; \
@@ -148,58 +196,8 @@ RUN SERVICE=autossh;\
     	chmod +x ${SCRIPT}
 
 
-# Startup - gateway delayed job
-#
-RUN SERVICE=delayed_job;\
-    mkdir -p /etc/service/${SERVICE}/; \
-    SCRIPT=/etc/service/${SERVICE}/run; \
-    ( \
-      echo "#!/bin/bash"; \
-      echo ""; \
-      echo ""; \
-      echo "# Start delayed job"; \
-      echo "#"; \
-      echo "cd /gateway/"; \
-      echo "/sbin/setuser app bundle exec /gateway/script/delayed_job stop > /dev/null"; \
-      echo "[ ! -s /gateway/tmp/pids/server.pid ]|| rm /gateway/tmp/pids/server.pid"; \
-      echo "echo 'Starting delayed_job'"; \
-      echo "exec /sbin/setuser app bundle exec /gateway/script/delayed_job run"; \
-    )  \
-      >> ${SCRIPT}; \
-    chmod +x ${SCRIPT}
-
-
-# Startup - gateway rails server
-#
-RUN SERVICE=rails;\
-    mkdir -p /etc/service/${SERVICE}/; \
-    SCRIPT=/etc/service/${SERVICE}/run; \
-    ( \
-      echo "#!/bin/bash"; \
-      echo ""; \
-      echo ""; \
-      echo "# Set variables"; \
-      echo "#"; \
-      echo "DOCTOR_IDS=\${DOCTOR_IDS:-cpsid}"; \
-      echo ""; \
-      echo ""; \
-      echo "# Populate providers.txt with DOCTOR_IDS"; \
-      echo "#"; \
-      echo "/gateway/providers.sh add \${DOCTOR_IDS}"; \
-      echo ""; \
-      echo ""; \
-      echo "# Start Rails server"; \
-      echo "#"; \
-      echo "cd /gateway/"; \
-      echo "echo 'Starting rails'"; \
-      echo "exec /sbin/setuser app bundle exec rails server -p 3001"; \
-    )  \
-      >> ${SCRIPT}; \
-    chmod +x ${SCRIPT}
-
-
 ################################################################################
-# Test and Maintenance Scripts
+# Cron and Maintenance Scripts
 ################################################################################
 
 
@@ -258,6 +256,22 @@ RUN SCRIPT=/db_maintenance.sh; \
     echo "0 12 * * 0 "${SCRIPT}; \
   ) \
     | crontab -
+
+
+################################################################################
+# Application
+################################################################################
+
+
+# Prepare /gateway/ folder, point mongoid.yml to container and run install
+#
+WORKDIR /gateway/
+COPY . .
+RUN sed -i 's/localhost/database/' config/mongoid.yml
+RUN mkdir -p ./tmp/pids ./util/files; \
+    gem install multipart-post; \
+    chown -R app:app /gateway/; \
+    /sbin/setuser app bundle install --path vendor/bundle
 
 
 ################################################################################
