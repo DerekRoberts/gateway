@@ -92,7 +92,7 @@ RUN SERVICE=rails;\
       echo '# Start Rails server, removing pidfile on exit or failure'; \
       echo '#'; \
       echo 'cd /gateway/'; \
-      echo 'echo 'Starting rails''; \
+      echo 'echo "Starting Rails"'; \
       echo '/sbin/setuser app bundle exec rails server -p 3001 || \'; \
       echo '  rm ${PIDFILE}'; \
     )  \
@@ -119,7 +119,7 @@ RUN SERVICE=delayed_job;\
       echo '# Start delayed job, removing pidfile on exit or failure'; \
       echo '#'; \
       echo 'cd /gateway/'; \
-      echo 'echo 'Starting delayed_job''; \
+      echo 'echo "Starting delayed_job"'; \
       echo '/sbin/setuser app bundle exec /gateway/script/delayed_job run || \'; \
       echo '  rm ${PIDFILE}'; \
     )  \
@@ -180,6 +180,7 @@ RUN SERVICE=autossh;\
       echo ""; \
       echo "# Start primary autossh tunnel, keep in foreground"; \
       echo "#"; \
+      echo 'echo "Starting AutoSSH"'; \
       echo "/sbin/setuser autossh /usr/bin/autossh \${IP_COMPOSER} -p \${PORT_AUTOSSH} -N -R \${PORT_REMOTE}:localhost:3001 \\"; \
       echo "  -o ServerAliveInterval=30 -o Protocol=2 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no"; \
       echo ""; \
