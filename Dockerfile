@@ -207,6 +207,8 @@ RUN SERVICE=autossh;\
 RUN SCRIPT=/ssh_test.sh; \
     ( \
       echo "#!/bin/bash"; \
+      echo "#"; \
+      echo "set -eu"; \
       echo ""; \
       echo ""; \
       echo "# Attempt to connect autossh tunnel and notify user"; \
@@ -237,6 +239,8 @@ RUN SCRIPT=/ssh_test.sh; \
 RUN SCRIPT=/db_maintenance.sh; \
   ( \
     echo "#!/bin/bash"; \
+    echo "#"; \
+    echo "set -eu"; \
     echo ""; \
     echo ""; \
     echo "# Set index"; \
@@ -246,6 +250,7 @@ RUN SCRIPT=/db_maintenance.sh; \
     echo ""; \
     echo "# Database junk cleanup"; \
     echo "#"; \
+    echo "/usr/bin/mongo database:27017/query_gateway_development --eval 'db.delayed_backend_mongoid_jobs.drop()'"; \
     echo "/usr/bin/mongo database:27017/query_gateway_development --eval 'db.providers.drop()'"; \
     echo "/usr/bin/mongo database:27017/query_gateway_development --eval 'db.queries.drop()'"; \
     echo "/usr/bin/mongo database:27017/query_gateway_development --eval 'db.results.drop()'"; \
@@ -253,8 +258,9 @@ RUN SCRIPT=/db_maintenance.sh; \
     >> ${SCRIPT}; \
   chmod +x ${SCRIPT}; \
   ( \
-    echo "# Run maintenance script (Sundays at noon)"; \
-    echo "0 12 * * 0 "${SCRIPT}; \
+    echo "# Run maintenance script (boot, 22 PST = 6 UTC)"; \
+    echo '@reboot '${SCRIPT}; \
+    echo "0 6 * * * "${SCRIPT}; \
   ) \
     | crontab -
 
