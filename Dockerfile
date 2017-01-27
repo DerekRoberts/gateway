@@ -141,10 +141,10 @@ RUN SERVICE=autossh;\
       echo "# Set variables"; \
       echo "#"; \
       echo "GATEWAY_ID=\${GATEWAY_ID:-0}"; \
-      echo "TEST_OPT_IN=\${TEST_OPT_IN:-no}"; \
+      echo "USE_QDEV=\${USE_QDEV:-yes}"; \
       echo "#"; \
-      echo "IP_COMPOSER=\${IP_COMPOSER:-142.104.128.120}"; \
-      echo "IP_TEST_GRP=\${IP_TEST_GRP:-142.104.128.121}"; \
+      echo "IP_PROD=\${IP_PROD:-142.104.128.120}"; \
+      echo "IP_QDEV=\${IP_QDEV:-142.104.128.121}"; \
       echo "PORT_AUTOSSH=\${PORT_AUTOSSH:-2774}"; \
       echo "PORT_START_GATEWAY=\${PORT_START_GATEWAY:-40000}"; \
       echo "PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${GATEWAY_ID}\`"; \
@@ -159,11 +159,11 @@ RUN SERVICE=autossh;\
       echo "fi"; \
       echo ""; \
       echo ""; \
-      echo "# Start test autossh tunnel (requires opt-in), leave in background"; \
+      echo "# Start query dev autossh tunnel (can opt out), leave in background"; \
       echo "#"; \
-      echo "if [ \${TEST_OPT_IN} == yes ]"; \
+      echo "if [ \${USE_QDEV} != no ]"; \
       echo "then"; \
-      echo "  /sbin/setuser autossh /usr/bin/autossh \${IP_TEST_GRP} -p \${PORT_AUTOSSH} -N -R \${PORT_REMOTE}:localhost:3001 \\"; \
+      echo "  /sbin/setuser autossh /usr/bin/autossh \${IP_QDEV} -p \${PORT_AUTOSSH} -N -R \${PORT_REMOTE}:localhost:3001 \\"; \
       echo "    -o ServerAliveInterval=60 -o Protocol=2 -o StrictHostKeyChecking=no -f"; \
       echo "fi"; \
       echo ""; \
@@ -181,7 +181,7 @@ RUN SERVICE=autossh;\
       echo "# Start primary autossh tunnel, keep in foreground"; \
       echo "#"; \
       echo 'echo "Starting AutoSSH"'; \
-      echo "/sbin/setuser autossh /usr/bin/autossh \${IP_COMPOSER} -p \${PORT_AUTOSSH} -N -R \${PORT_REMOTE}:localhost:3001 \\"; \
+      echo "/sbin/setuser autossh /usr/bin/autossh \${IP_PROD} -p \${PORT_AUTOSSH} -N -R \${PORT_REMOTE}:localhost:3001 \\"; \
       echo "  -o ServerAliveInterval=30 -o Protocol=2 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no"; \
       echo ""; \
       echo ""; \
