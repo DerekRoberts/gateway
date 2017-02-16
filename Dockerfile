@@ -150,11 +150,15 @@ RUN SERVICE=autossh;\
       echo "PORT_REMOTE=\`expr \${PORT_START_GATEWAY} + \${GATEWAY_ID}\`"; \
       echo ""; \
       echo ""; \
+      echo "# Ensure autossh user's home directory permissions"; \
+      echo "#"; \
+      echo "chown -R autossh:autossh /home/autossh/"; \
+      echo ""; \
+      echo ""; \
       echo "# Check for SSH keys, create if necessary"; \
       echo "#"; \
       echo "if [ ! -s /home/autossh/.ssh/id_rsa.pub ]"; \
       echo "then"; \
-      echo "  chown -R autossh:autossh /home/autossh/"; \
       echo "  /sbin/setuser autossh ssh-keygen -b 4096 -t rsa -N \"\" -C ep\${GATEWAY_ID}-\$(date +%Y-%m-%d-%T) -f /home/autossh/.ssh/id_rsa"; \
       echo "fi"; \
       echo ""; \
