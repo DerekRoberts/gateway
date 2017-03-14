@@ -26,13 +26,13 @@ FROM phusion/passenger-ruby19
 MAINTAINER derek.roberts@gmail.com
 LABEL org.label-schema.description="Part of an Endpoint deployment." \
   org.label-schema.license="GPL-3.0" \
-  org.label-schema.name="HDC/PDC/hQuery Gateway" \
+  org.label-schema.name="HDC/hQuery Gateway" \
   org.label-schema.schema-version="1.0" \
   org.label-schema.url="http://hdcbc.ca/" \
   org.label-schema.usage="See https://github.com/HDCbc/endpoint." \
   org.label-schema.vcs-url="https://github.com/HDCbc/gateway" \
   org.label-schema.vendor="Health Data Coalition" \
-  org.label-schema.version="0.1.7"
+  org.label-schema.version="1.0.1"
 
 
 ################################################################################
