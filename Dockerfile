@@ -262,9 +262,9 @@ RUN SCRIPT=/db_maintenance.sh; \
     >> ${SCRIPT}; \
   chmod +x ${SCRIPT}; \
   ( \
-    echo "# Run maintenance script (boot, 22 PST = 6 UTC)"; \
+    echo "# Run maintenance script at boot and Sun 22 PST (= 6 UTC)"; \
     echo '@reboot '${SCRIPT}; \
-    echo "0 6 * * * "${SCRIPT}; \
+    echo "0 6 * * Sun "${SCRIPT}; \
   ) \
     | crontab -
 
