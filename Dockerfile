@@ -141,7 +141,7 @@ RUN SERVICE=autossh;\
       echo "# Set variables"; \
       echo "#"; \
       echo "GATEWAY_ID=\${GATEWAY_ID:-0}"; \
-      echo "USE_QDEV=\${USE_QDEV:-yes}"; \
+      echo "USE_QDEV=\${USE_QDEV:-no}"; \
       echo "#"; \
       echo "IP_PROD=\${IP_PROD:-142.104.128.120}"; \
       echo "IP_QDEV=\${IP_QDEV:-142.104.128.121}"; \
